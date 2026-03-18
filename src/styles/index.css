@@ -1,3 +1,22 @@
 @import './fonts.css';
 @import './tailwind.css';
 @import './theme.css';
+@import 'leaflet/dist/leaflet.css';
+
+/* Custom Leaflet marker styles */
+.custom-charger-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.user-location-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+@keyframes ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
