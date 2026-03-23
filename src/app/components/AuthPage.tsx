@@ -5,20 +5,21 @@ import { useApp } from "../context/AppContext";
 
 export function AuthPage() {
   const navigate = useNavigate();
-  const { login, signup, isAuthenticated } = useApp();
+  const { login, signup, loginWithGoogle, isAuthenticated, authLoading } = useApp();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
     navigate("/");
     return null;
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -32,12 +33,32 @@ export function AuthPage() {
       return;
     }
 
-    if (isLogin) {
-      login(email, password);
-    } else {
-      signup(name, email, password);
+    setLoading(true);
+    try {
+      if (isLogin) {
+        await login(email, password);
+      } else {
+        await signup(name, email, password);
+      }
+      navigate("/");
+    } catch (err: any) {
+      setError(err.message || "An error occurred");
+    } finally {
+      setLoading(false);
     }
-    navigate("/");
+  };
+
+  const handleGoogleLogin = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      await loginWithGoogle();
+      navigate("/");
+    } catch (err: any) {
+      setError(err.message || "An error occurred with Google sign-in");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -126,9 +147,10 @@ export function AuthPage() {
 
           <button
             type="submit"
-            className="w-full py-2.5 bg-primary text-white rounded-xl text-[0.9375rem]"
+            disabled={loading || authLoading}
+            className="w-full py-2.5 bg-primary text-white rounded-xl text-[0.9375rem] disabled:opacity-50"
           >
-            {isLogin ? "Sign In" : "Create Account"}
+            {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
           </button>
         </form>
 
@@ -142,11 +164,9 @@ export function AuthPage() {
         {/* Social Login */}
         <div className="w-full max-w-sm space-y-2 mt-4">
           <button
-            onClick={() => {
-              login("google@email.com", "");
-              navigate("/");
-            }}
-            className="w-full py-2.5 border border-border rounded-xl text-[0.875rem] flex items-center justify-center gap-2"
+            onClick={handleGoogleLogin}
+            disabled={loading || authLoading}
+            className="w-full py-2.5 border border-border rounded-xl text-[0.875rem] flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -169,11 +189,8 @@ export function AuthPage() {
             Continue with Google
           </button>
           <button
-            onClick={() => {
-              login("apple@email.com", "");
-              navigate("/");
-            }}
-            className="w-full py-2.5 bg-black text-white rounded-xl text-[0.875rem] flex items-center justify-center gap-2"
+            disabled={true}
+            className="w-full py-2.5 bg-black text-white rounded-xl text-[0.875rem] flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="white">
               <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import {
   currentUser as defaultUser,
   chargers as defaultChargers,
@@ -9,6 +9,7 @@ import {
   type Booking,
   type Review,
 } from "../data/mock-data";
+import { useFirebaseAuth } from "../../hooks/useFirebaseAuth";
 
 interface AppState {
   user: User | null;
@@ -16,9 +17,12 @@ interface AppState {
   chargers: Charger[];
   bookings: Booking[];
   reviews: Review[];
-  login: (email: string, password: string) => void;
-  signup: (name: string, email: string, password: string) => void;
-  logout: () => void;
+  authLoading: boolean;
+  authError: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
   addBooking: (booking: Booking) => void;
   cancelBooking: (id: string) => void;
   addReview: (review: Review) => void;
@@ -28,25 +32,46 @@ interface AppState {
 const AppContext = createContext<AppState | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(defaultUser);
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const { firebaseUser, loading: authLoading, error: authError, signup: firebaseSignup, login: firebaseLogin, loginWithGoogle: firebaseLoginWithGoogle, logout: firebaseLogout } = useFirebaseAuth();
+  const [user, setUser] = useState<User | null>(null);
   const [chargers, setChargers] = useState(defaultChargers);
   const [bookings, setBookings] = useState(defaultBookings);
   const [reviews, setReviews] = useState(defaultReviews);
 
-  const login = (_email: string, _password: string) => {
-    setUser(defaultUser);
-    setIsAuthenticated(true);
+  // Sync Firebase user with app user
+  useEffect(() => {
+    if (firebaseUser) {
+      setUser({
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName || "User",
+        avatar: firebaseUser.photoURL || "https://i.pravatar.cc/150?img=33",
+        email: firebaseUser.email || "",
+        phone: firebaseUser.phoneNumber || "+91 98765 43210",
+        joinedDate: "March 2026",
+        chargersListed: 0,
+        totalBookings: 0,
+        rating: 5.0,
+        verified: !!firebaseUser.emailVerified,
+      });
+    } else {
+      setUser(null);
+    }
+  }, [firebaseUser]);
+
+  const login = async (email: string, password: string) => {
+    await firebaseLogin(email, password);
   };
 
-  const signup = (name: string, email: string, _password: string) => {
-    setUser({ ...defaultUser, name, email });
-    setIsAuthenticated(true);
+  const signup = async (name: string, email: string, password: string) => {
+    await firebaseSignup(name, email, password);
   };
 
-  const logout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
+  const loginWithGoogle = async () => {
+    await firebaseLoginWithGoogle();
+  };
+
+  const logout = async () => {
+    await firebaseLogout();
   };
 
   const addBooking = (booking: Booking) => {
@@ -86,12 +111,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         user,
-        isAuthenticated,
+        isAuthenticated: !!firebaseUser,
         chargers,
         bookings,
         reviews,
+        authLoading,
+        authError,
         login,
         signup,
+        loginWithGoogle,
         logout,
         addBooking,
         cancelBooking,

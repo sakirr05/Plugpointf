@@ -185,9 +185,13 @@ export function ProfilePage() {
       {/* Logout */}
       <div className="px-4 mt-6">
         <button
-          onClick={() => {
-            logout();
-            navigate("/auth");
+          onClick={async () => {
+            try {
+              await logout();
+              navigate("/auth");
+            } catch (error) {
+              console.error("Logout error:", error);
+            }
           }}
           className="flex items-center justify-center gap-2 w-full py-2.5 border border-destructive text-destructive rounded-xl text-[0.875rem]"
         >
