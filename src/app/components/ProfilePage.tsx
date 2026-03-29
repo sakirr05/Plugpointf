@@ -17,10 +17,11 @@ import {
   Award,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { toast } from "sonner";
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout, bookings, chargers } = useApp();
+  const { user, isAuthenticated, logout, bookings, chargers, reviews } = useApp();
 
   if (!isAuthenticated || !user) {
     return (
@@ -48,37 +49,37 @@ export function ProfilePage() {
     .filter((b) => b.status === "completed")
     .reduce((sum, b) => sum + b.totalCost, 0);
 
+  const upcomingBookings = bookings.filter((b) => b.status === "upcoming").length;
+  const userReviews = reviews.filter((r) => r.userId === user.id).length;
+  
+  const hostBookings = bookings.filter((b) => 
+    userChargers.some((c) => c.id === b.chargerId) && b.status === "completed"
+  );
+  const hostEarnings = hostBookings.reduce((sum, b) => sum + b.totalCost, 0);
+  const isSuperhost = user.rating >= 4.5 && userChargers.length > 0;
+
   const menuSections = [
     {
       title: "Account",
       items: [
-        {
-          icon: CreditCard,
-          label: "Payment Methods",
-          detail: "Visa **** 4242",
-        },
-        { icon: Bell, label: "Notifications", detail: "On" },
-        { icon: Heart, label: "Saved Chargers", detail: "3" },
-        { icon: MessageCircle, label: "Messages", detail: "2 new" },
+        { icon: CreditCard, label: "Wallet Balance", detail: "₹0.00", onClick: () => toast.info("Wallet & Payments integration coming soon!") },
+        { icon: Bell, label: "Active Bookings", detail: upcomingBookings > 0 ? `${upcomingBookings} upcoming` : "None", onClick: () => navigate("/bookings") },
+        { icon: Heart, label: "My Reviews", detail: `${userReviews} reviews`, onClick: () => toast.info("Reviews management coming soon!") },
       ],
     },
     {
       title: "Host",
       items: [
-        {
-          icon: Zap,
-          label: "My Chargers",
-          detail: `${userChargers.length} listed`,
-        },
-        { icon: CalendarDays, label: "Host Earnings", detail: "₹18,500" },
-        { icon: Award, label: "Host Level", detail: "Superhost" },
+        { icon: Zap, label: "My Chargers", detail: `${userChargers.length} listed`, onClick: () => navigate("/list-charger") },
+        { icon: CalendarDays, label: "Host Earnings", detail: `₹${hostEarnings.toLocaleString()}`, onClick: () => toast.info("Detailed earnings dashboard coming soon!") },
+        { icon: Award, label: "Host Level", detail: isSuperhost ? "Superhost" : "Standard Host", onClick: () => toast.info("Host levels are assigned automatically based on ratings.") },
       ],
     },
     {
       title: "Support",
       items: [
-        { icon: HelpCircle, label: "Help Center", detail: "" },
-        { icon: Settings, label: "Settings", detail: "" },
+        { icon: HelpCircle, label: "Help Center", detail: "", onClick: () => toast.info("Help Center coming soon!") },
+        { icon: Settings, label: "Settings", detail: "", onClick: () => toast.info("App Settings coming soon!") },
       ],
     },
   ];
@@ -161,6 +162,7 @@ export function ProfilePage() {
               return (
                 <button
                   key={item.label}
+                  onClick={item.onClick}
                   className={`flex items-center gap-3 w-full px-3 py-3 text-left hover:bg-muted/50 transition-colors ${
                     i < section.items.length - 1
                       ? "border-b border-border"
