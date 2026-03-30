@@ -321,7 +321,7 @@ export function ChargerDetailPage() {
       </div>
 
       {/* Bottom Booking Bar */}
-      <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 bg-white border-t border-border px-4 py-3">
+      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 bg-white border-t border-border px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
         <div className="flex items-center justify-between max-w-lg mx-auto">
           <div>
             <span className="text-[1.25rem] text-primary" style={{ fontWeight: 700 }}>

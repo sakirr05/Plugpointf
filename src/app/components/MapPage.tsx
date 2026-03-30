@@ -65,7 +65,7 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
 }
 
 export function MapPage() {
-  const { chargers } = useApp();
+  const { chargers, fetchPublicChargers } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -250,6 +250,9 @@ export function MapPage() {
               zoom: 14
             });
           }
+
+          // Fetch public chargers nearby
+          fetchPublicChargers(latitude, longitude);
 
           if (chargers.length > 0) {
             let nearest = chargers[0];
