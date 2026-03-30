@@ -15,6 +15,7 @@ import {
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import type { Charger } from "../data/mock-data";
+import { encodePolyline } from "../../lib/polyline";
 
 // Map center for Bangalore
 const MAP_CENTER: [number, number] = [77.63, 12.96]; // [lng, lat] for MapLibre
@@ -65,7 +66,7 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
 }
 
 export function MapPage() {
-  const { chargers, fetchPublicChargers } = useApp();
+  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
@@ -74,6 +75,7 @@ export function MapPage() {
   const [selectedCharger, setSelectedCharger] = useState<Charger | null>(null);
   const [filterConnector, setFilterConnector] = useState("All");
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   
   // Trip Planner State
   const [isTripPanelOpen, setIsTripPanelOpen] = useState(tabParam === "trip");
@@ -168,6 +170,10 @@ export function MapPage() {
       const geojsonData = routeData.routes[0].geometry;
       setTripState((s) => ({ ...s, routeData: geojsonData, isLoading: false }));
       setIsTripPanelOpen(false);
+
+      // Fetch all public OCM chargers located along this driving polyline
+      const polylineStr = encodePolyline(geojsonData.coordinates);
+      fetchPublicChargersForRoute(polylineStr);
     } catch (err: any) {
       setTripState((s) => ({
         ...s,
@@ -280,6 +286,9 @@ export function MapPage() {
           if (userMarkerRef.current) {
             userMarkerRef.current.setLngLat([longitude, latitude]);
           }
+          if (isNavigating && mapRef.current) {
+            mapRef.current.flyTo({ center: [longitude, latitude], zoom: 16 });
+          }
         },
         (err) => console.error("Watch location error:", err),
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
@@ -291,7 +300,7 @@ export function MapPage() {
         navigator.geolocation.clearWatch(watchId);
       }
     };
-  }, [chargers]);
+  }, [chargers, isNavigating]);
 
   // Update trip link param
   useEffect(() => {
@@ -414,6 +423,48 @@ export function MapPage() {
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden bg-slate-50">
+      {/* Navigation Mode Header */}
+      {isNavigating && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/95 backdrop-blur shadow-xl rounded-full px-4 py-2 flex items-center gap-3 border border-border">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600"></span>
+            </span>
+            <span className="text-[0.875rem] font-bold">Navigating...</span>
+            <div className="w-px h-4 bg-border/60 mx-1 border-gray-300"></div>
+            <button
+               onClick={() => {
+                 setIsNavigating(false);
+                 setTripState(s => ({...s, routeData: null}));
+               }}
+               className="text-[0.8125rem] text-red-600 font-bold hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
+            >
+              End Trip
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Start Journey Overlay */}
+      {tripState.routeData && !isNavigating && (
+        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8">
+          <button 
+             onClick={() => {
+               setIsNavigating(true);
+               if (mapRef.current && userMarkerRef.current) {
+                 const location = userMarkerRef.current.getLngLat() || mapRef.current.getCenter();
+                 mapRef.current.flyTo({ center: location, zoom: 16, pitch: 45 });
+               }
+             }}
+             className="bg-blue-600 text-white px-8 py-3.5 rounded-full shadow-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-blue-600/20"
+          >
+            <Navigation className="w-5 h-5 fill-current" />
+            Start Journey
+          </button>
+        </div>
+      )}
+
       {/* Top Controls */}
       <div className="absolute top-3 left-3 right-3 z-10 flex flex-col gap-2 pointer-events-none">
         <div className="flex gap-2 py-1 overflow-x-auto no-scrollbar pointer-events-auto items-center">
