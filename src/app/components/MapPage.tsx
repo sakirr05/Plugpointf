@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { useNavigate, useLocation } from "react-router";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import {
   Zap,
   Star,
@@ -10,13 +10,34 @@ import {
   Navigation,
   LocateFixed,
   Loader2,
+  Maximize2,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import type { Charger } from "../data/mock-data";
 
-// Map center for Bangalore (using OpenStreetMap with Leaflet)
-const MAP_CENTER: [number, number] = [12.96, 77.63];
+// Map center for Bangalore
+const MAP_CENTER: [number, number] = [77.63, 12.96]; // [lng, lat] for MapLibre
+const GOOGLE_MAP_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    'google-roadmap': {
+      type: 'raster',
+      tiles: ['https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'],
+      tileSize: 256,
+      attribution: 'Map data &copy; <a href="https://www.google.com/maps">Google</a>'
+    }
+  },
+  layers: [
+    {
+      id: 'google-layer',
+      type: 'raster',
+      source: 'google-roadmap',
+      minzoom: 0,
+      maxzoom: 22
+    }
+  ]
+};
 
 // Distance Calculation Helpers
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -43,94 +64,19 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
   return minDistance;
 }
 
-// Custom marker icon for chargers
-const createChargerIcon = (
-  pricePerHour: number,
-  isAvailable: boolean,
-  isSelected: boolean
-) => {
-  const color = isSelected ? "#10B981" : isAvailable ? "#ffffff" : "#d1d5db";
-  const textColor = isSelected ? "#ffffff" : isAvailable ? "#000000" : "#6b7280";
-  const borderColor = isSelected ? "#10B981" : "#e5e7eb";
-
-  return L.divIcon({
-    className: "custom-charger-marker",
-    html: `
-      <div style="
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        padding: 4px 8px;
-        border-radius: 9999px;
-        background-color: ${color};
-        color: ${textColor};
-        border: 1px solid ${borderColor};
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        font-size: 11px;
-        font-weight: 600;
-        white-space: nowrap;
-        transform: ${isSelected ? 'scale(1.2)' : 'scale(1)'};
-        transition: all 0.2s;
-      ">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-        </svg>
-        <span>₹${pricePerHour}</span>
-      </div>
-      <div style="
-        width: 8px;
-        height: 8px;
-        position: absolute;
-        bottom: -4px;
-        left: 50%;
-        transform: translateX(-50%) rotate(45deg);
-        background-color: ${color};
-        border-right: 1px solid ${borderColor};
-        border-bottom: 1px solid ${borderColor};
-      "></div>
-    `,
-    iconSize: [60, 30],
-    iconAnchor: [30, 30],
-  });
-};
-
-// User location marker
-const userLocationIcon = L.divIcon({
-  className: "user-location-marker",
-  html: `
-    <div style="position: relative;">
-      <div style="
-        width: 16px;
-        height: 16px;
-        background-color: #3b82f6;
-        border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-      "></div>
-      <div style="
-        position: absolute;
-        inset: 0;
-        width: 16px;
-        height: 16px;
-        background-color: rgba(59, 130, 246, 0.3);
-        border-radius: 50%;
-        animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
-      "></div>
-    </div>
-  `,
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
-});
-
 export function MapPage() {
-  const { chargers } = useApp();
+  const { chargers, fetchPublicChargers } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const tabParam = queryParams.get("tab");
+
   const [selectedCharger, setSelectedCharger] = useState<Charger | null>(null);
   const [filterConnector, setFilterConnector] = useState("All");
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
   
   // Trip Planner State
-  const [isTripPanelOpen, setIsTripPanelOpen] = useState(false);
+  const [isTripPanelOpen, setIsTripPanelOpen] = useState(tabParam === "trip");
   const [tripState, setTripState] = useState<{
     origin: string;
     destination: string;
@@ -145,20 +91,17 @@ export function MapPage() {
     error: null,
   });
 
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const userMarkerRef = useRef<L.Marker | null>(null);
-  
-  // Use a Map to cache markers for performance optimization
-  const markersCacheRef = useRef<Map<string, L.Marker>>(new Map());
-  const routeLayerRef = useRef<L.GeoJSON | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({});
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
 
+  // Filter logic
   const filtered = chargers.filter((c) => {
     const matchConnector =
       filterConnector === "All" || c.connectorType === filterConnector;
     const matchAvailable = !showOnlyAvailable || c.available;
     
-    // Proximity logic for route
     let matchRoute = true;
     if (tripState.routeData && tripState.routeData.coordinates) {
       const dist = minDistanceFromChargerToRoute(c, tripState.routeData.coordinates);
@@ -185,9 +128,8 @@ export function MapPage() {
           originCoords = [pos.coords.longitude, pos.coords.latitude];
           setTripState(s => ({ ...s, origin: "My Location" }));
           
-          // Move user marker
           if (userMarkerRef.current) {
-            userMarkerRef.current.setLatLng([pos.coords.latitude, pos.coords.longitude]);
+            userMarkerRef.current.setLngLat([pos.coords.longitude, pos.coords.latitude]);
           }
         } catch (e) {
           throw new Error("Could not get GPS location. Please allow location access or type an address.");
@@ -213,7 +155,7 @@ export function MapPage() {
       if (!dData.length) throw new Error("Could not find destination address");
       const destCoords = [parseFloat(dData[0].lon), parseFloat(dData[0].lat)];
 
-      // Fetch Driving Route from open source router (OSRM)
+      // Fetch Driving Route from OSRM
       const routeRes = await fetch(
         `https://router.project-osrm.org/route/v1/driving/${originCoords[0]},${originCoords[1]};${destCoords[0]},${destCoords[1]}?overview=full&geometries=geojson`
       );
@@ -224,9 +166,8 @@ export function MapPage() {
       }
 
       const geojsonData = routeData.routes[0].geometry;
-
       setTripState((s) => ({ ...s, routeData: geojsonData, isLoading: false }));
-      setIsTripPanelOpen(false); // Map auto-zooms below, close panel to see
+      setIsTripPanelOpen(false);
     } catch (err: any) {
       setTripState((s) => ({
         ...s,
@@ -243,104 +184,230 @@ export function MapPage() {
             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 });
           });
           setTripState(s => ({...s, origin: "My Location"}));
-          if (userMarkerRef.current && mapInstanceRef.current) {
-               userMarkerRef.current.setLatLng([pos.coords.latitude, pos.coords.longitude]);
-               mapInstanceRef.current.setView([pos.coords.latitude, pos.coords.longitude], 14, { animate: true });
+          if (userMarkerRef.current && mapRef.current) {
+               userMarkerRef.current.setLngLat([pos.coords.longitude, pos.coords.latitude]);
+               mapRef.current.flyTo({
+                 center: [pos.coords.longitude, pos.coords.latitude],
+                 zoom: 14,
+               });
           }
       } catch (e) {
           setTripState(s => ({...s, origin: "", error: "Location permission denied"}));
       }
   };
 
-  // Initialize map
+  // Initialize MapLibre
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapContainerRef.current || mapRef.current) return;
 
-    const map = L.map(mapRef.current, {
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: GOOGLE_MAP_STYLE,
       center: MAP_CENTER,
       zoom: 13,
-      zoomControl: false,
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
+    map.on('load', () => {
+      // User Marker
+      const el = document.createElement('div');
+      el.className = 'user-marker';
+      el.innerHTML = `
+        <div style="position: relative;">
+          <div style="width: 16px; height: 16px; background-color: #3b82f6; border-radius: 50%; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+          <div style="position: absolute; inset: 0; width: 16px; height: 16px; background-color: rgba(59, 130, 246, 0.3); border-radius: 50%; animation: ping 2s infinite;"></div>
+        </div>
+      `;
+      userMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat(MAP_CENTER)
+        .addTo(map);
+    });
 
-    userMarkerRef.current = L.marker(MAP_CENTER, { icon: userLocationIcon }).addTo(map);
-    mapInstanceRef.current = map;
+    mapRef.current = map;
 
     return () => {
       map.remove();
-      mapInstanceRef.current = null;
+      mapRef.current = null;
     };
   }, []);
 
-  // Update trip polyline rendering
+  // Set and track live location and find nearest charger
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
+    let watchId: number;
 
-    if (routeLayerRef.current) {
-      routeLayerRef.current.remove();
-      routeLayerRef.current = null;
+    if (navigator.geolocation) {
+      // First get current position to center map and find charger
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { longitude, latitude } = pos.coords;
+          
+          if (userMarkerRef.current) {
+            userMarkerRef.current.setLngLat([longitude, latitude]);
+          }
+
+          if (mapRef.current) {
+            mapRef.current.flyTo({
+              center: [longitude, latitude],
+              zoom: 14
+            });
+          }
+
+          // Fetch public chargers nearby
+          fetchPublicChargers(latitude, longitude);
+
+          if (chargers.length > 0) {
+            let nearest = chargers[0];
+            let minDist = getDistance(latitude, longitude, nearest.lat, nearest.lng);
+            
+            for (let i = 1; i < chargers.length; i++) {
+              const dist = getDistance(latitude, longitude, chargers[i].lat, chargers[i].lng);
+              if (dist < minDist) {
+                minDist = dist;
+                nearest = chargers[i];
+              }
+            }
+            
+            setSelectedCharger(nearest);
+          }
+        },
+        (err) => console.error("Initial location error:", err),
+        { timeout: 10000 }
+      );
+
+      // Then watch position for live updates
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { longitude, latitude } = pos.coords;
+          if (userMarkerRef.current) {
+            userMarkerRef.current.setLngLat([longitude, latitude]);
+          }
+        },
+        (err) => console.error("Watch location error:", err),
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+      );
     }
 
-    if (tripState.routeData) {
-      routeLayerRef.current = L.geoJSON(tripState.routeData, {
-        style: {
-          color: "#2563eb",
-          weight: 5,
-          opacity: 0.8,
-        },
-      }).addTo(map);
+    return () => {
+      if (watchId !== undefined && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [chargers]);
 
-      map.fitBounds(routeLayerRef.current.getBounds(), { padding: [50, 50] });
-    } else {
-      map.setView(MAP_CENTER, 13);
+  // Update trip link param
+  useEffect(() => {
+    if (tabParam === "trip") {
+      setIsTripPanelOpen(true);
+      // Remove query param without reload
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [tabParam]);
+
+  // Route Rendering
+  useEffect(() => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+    const map = mapRef.current;
+
+    if (map.getLayer('route')) map.removeLayer('route');
+    if (map.getSource('route')) map.removeSource('route');
+
+    if (tripState.routeData) {
+      map.addSource('route', {
+        'type': 'geojson',
+        'data': {
+          'type': 'Feature',
+          'properties': {},
+          'geometry': tripState.routeData
+        }
+      });
+      map.addLayer({
+        'id': 'route',
+        'type': 'line',
+        'source': 'route',
+        'layout': {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        'paint': {
+          'line-color': '#2563eb',
+          'line-width': 6,
+          'line-opacity': 0.8
+        }
+      });
+
+      // Fit bounds
+      const coords = tripState.routeData.coordinates;
+      const bounds = coords.reduce((acc: maplibregl.LngLatBounds, coord: [number, number]) => {
+        return acc.extend(coord);
+      }, new maplibregl.LngLatBounds(coords[0], coords[0]));
+      
+      map.fitBounds(bounds, { padding: 50 });
     }
   }, [tripState.routeData]);
 
-  // Optimized Marker rendering (adds/removes selectively without full unmounts)
+  // Marker Management
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    const map = mapInstanceRef.current;
+    if (!mapRef.current) return;
+    const map = mapRef.current;
 
-    // Remove old markers that don't pass filter
+    // Remove old markers
     const activeIds = new Set(filtered.map(c => c.id));
-    for (const [id, marker] of markersCacheRef.current.entries()) {
+    Object.keys(markersRef.current).forEach(id => {
       if (!activeIds.has(id)) {
-        marker.remove();
-        markersCacheRef.current.delete(id);
+        markersRef.current[id].remove();
+        delete markersRef.current[id];
       }
-    }
+    });
 
-    // Add new or update existing
-    filtered.forEach((charger) => {
+    // Add/Update markers
+    filtered.forEach(charger => {
       const isSelected = selectedCharger?.id === charger.id;
-      const newIcon = createChargerIcon(charger.pricePerHour, charger.available, isSelected);
+      const color = isSelected ? "#10B981" : charger.available ? "#ffffff" : "#d1d5db";
+      const textColor = isSelected ? "#ffffff" : charger.available ? "#000000" : "#6b7280";
+      const borderColor = isSelected ? "#10B981" : "#e5e7eb";
 
-      if (markersCacheRef.current.has(charger.id)) {
-        markersCacheRef.current.get(charger.id)!.setIcon(newIcon);
+      if (markersRef.current[charger.id]) {
+        const el = markersRef.current[charger.id].getElement();
+        el.style.backgroundColor = color;
+        el.style.color = textColor;
+        el.style.borderColor = borderColor;
+        el.style.transform = isSelected ? 'scale(1.2)' : 'scale(1)';
       } else {
-        const marker = L.marker([charger.lat, charger.lng], { icon: newIcon }).addTo(map);
-        marker.on("click", () => {
-          setSelectedCharger((prev) => (prev?.id === charger.id ? null : charger));
+        const el = document.createElement('div');
+        el.className = 'custom-marker';
+        el.style.cssText = `
+          display: flex; align-items: center; gap: 4px; padding: 4px 8px;
+          border-radius: 9999px; background-color: ${color}; color: ${textColor};
+          border: 1px solid ${borderColor}; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+          position: relative;
+        `;
+        el.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span>₹${charger.pricePerHour}</span>
+          <div style="width: 8px; height: 8px; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); background-color: inherit; border-right: 1px solid inherit; border-bottom: 1px solid inherit;"></div>
+        `;
+        
+        el.addEventListener('click', () => {
+          setSelectedCharger(prev => prev?.id === charger.id ? null : charger);
         });
-        markersCacheRef.current.set(charger.id, marker);
+
+        markersRef.current[charger.id] = new maplibregl.Marker({ element: el })
+          .setLngLat([charger.lng, charger.lat])
+          .addTo(map);
       }
     });
   }, [filtered, selectedCharger]);
 
   return (
-    <div className="relative h-full flex flex-col">
-      {/* Top Filter and Trip Bar */}
-      <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-col gap-2 pointer-events-none">
-        
-        {/* Scrollable Pills */}
+    <div className="relative h-full flex flex-col overflow-hidden bg-slate-50">
+      {/* Top Controls */}
+      <div className="absolute top-3 left-3 right-3 z-10 flex flex-col gap-2 pointer-events-none">
         <div className="flex gap-2 py-1 overflow-x-auto no-scrollbar pointer-events-auto items-center">
           <button
             onClick={() => setIsTripPanelOpen(!isTripPanelOpen)}
-            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-colors flex items-center gap-1.5 font-medium border ${
+            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-all flex items-center gap-1.5 font-medium border ${
               isTripPanelOpen || tripState.routeData
                 ? "bg-blue-600 text-white border-blue-700" 
                 : "bg-white text-foreground border-border hover:bg-muted"
@@ -356,9 +423,8 @@ export function MapPage() {
             <button
               key={type}
               onClick={() => setFilterConnector(type === "Tesla" ? "Tesla Wall Connector" : type)}
-              className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-colors font-medium border ${
-                filterConnector === type ||
-                (type === "Tesla" && filterConnector === "Tesla Wall Connector")
+              className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-all font-medium border ${
+                filterConnector === type || (type === "Tesla" && filterConnector === "Tesla Wall Connector")
                   ? "bg-primary text-white border-primary"
                   : "bg-white text-foreground border-border"
               }`}
@@ -366,86 +432,76 @@ export function MapPage() {
               {type}
             </button>
           ))}
+          
           <button
             onClick={() => setShowOnlyAvailable(!showOnlyAvailable)}
-            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-colors font-medium border ${
-              showOnlyAvailable
-                ? "bg-emerald-500 text-white border-emerald-600"
-                : "bg-white text-foreground border-border"
+            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-all font-medium border ${
+              showOnlyAvailable ? "bg-emerald-500 text-white border-emerald-600" : "bg-white text-foreground border-border"
             }`}
           >
             Available Now
           </button>
         </div>
 
-        {/* Trip Planner Drawer */}
+        {/* Trip Panel */}
         {isTripPanelOpen && (
-          <div className="bg-white p-3.5 rounded-2xl shadow-xl border border-border flex flex-col gap-2 w-full max-w-sm mt-1 pointer-events-auto animate-in fade-in slide-in-from-top-4 duration-200">
-            <div className="flex items-center justify-between mb-1">
-               <h3 className="font-semibold text-[0.875rem] flex items-center gap-1.5">
-                   <Navigation className="w-4 h-4 text-blue-600"/> Plan your trip
+          <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 flex flex-col gap-3 w-full max-w-sm mt-1 pointer-events-auto animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center justify-between">
+               <h3 className="font-bold text-[0.875rem] flex items-center gap-2">
+                   <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                     <Navigation className="w-4 h-4 text-blue-600"/>
+                   </div>
+                   Plan your trip
                </h3>
-               <button 
-                 onClick={() => setIsTripPanelOpen(false)} 
-                 className="p-1 text-muted-foreground hover:bg-muted rounded-md"
-               >
+               <button onClick={() => setIsTripPanelOpen(false)} className="p-1.5 hover:bg-muted rounded-full">
                  <X className="w-4 h-4" />
                </button>
             </div>
             
-            <div className="relative flex flex-col gap-2.5">
-              <div className="absolute left-[1.05rem] top-4 bottom-4 w-0.5 bg-border -z-10 rounded"></div>
+            <div className="relative flex flex-col gap-2">
+              <div className="absolute left-[1.125rem] top-5 bottom-5 w-0.5 bg-slate-100 -z-0"></div>
               
-              <div className="flex items-center gap-2.5 z-10 w-full relative">
-                <div className="w-2.5 h-2.5 bg-blue-500 rounded-full ml-1 ring-4 ring-white shadow-sm flex-shrink-0"></div>
-                <input 
-                  type="text" 
-                  placeholder="Origin" 
-                  value={tripState.origin}
-                  onChange={(e) => setTripState(s => ({...s, origin: e.target.value}))}
-                  className="flex-1 text-[0.8125rem] px-3.5 py-2.5 bg-muted/60 rounded-xl border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all placeholder:text-muted-foreground w-full min-w-0"
-                />
-                <button 
-                  onClick={getGPSLocation}
-                  disabled={tripState.origin === "My Location" || tripState.origin === "Locating..."}
-                  title="Use Current Location"
-                  className="absolute right-1 p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100 disabled:opacity-50"
-                >
-                  <LocateFixed className="w-4 h-4" />
-                </button>
+              <div className="flex items-center gap-3 z-10 relative">
+                <div className="w-3 h-3 bg-blue-500 rounded-full ml-0.5 ring-4 ring-white shadow-sm"></div>
+                <div className="flex-1 relative">
+                  <input 
+                    type="text" 
+                    placeholder="Origin" 
+                    value={tripState.origin}
+                    onChange={(e) => setTripState(s => ({...s, origin: e.target.value}))}
+                    className="w-full text-[0.8125rem] px-4 py-2.5 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                  <button onClick={getGPSLocation} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 transition-opacity">
+                    <LocateFixed className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2.5 z-10 w-full relative">
-                <div className="w-2.5 h-2.5 bg-red-500 rounded-full ml-1 ring-4 ring-white shadow-sm flex-shrink-0"></div>
+              <div className="flex items-center gap-3 z-10 relative">
+                <div className="w-3 h-3 bg-rose-500 rounded-full ml-0.5 ring-4 ring-white shadow-sm"></div>
                 <input 
                   type="text" 
                   placeholder="Destination (e.g. Mysore)" 
                   value={tripState.destination}
                   onChange={(e) => setTripState(s => ({...s, destination: e.target.value}))}
-                  className="flex-1 text-[0.8125rem] px-3.5 py-2.5 bg-muted/60 rounded-xl border border-transparent focus:border-red-500 focus:bg-white outline-none transition-all placeholder:text-muted-foreground w-full min-w-0"
+                  className="w-full text-[0.8125rem] px-4 py-2.5 bg-slate-50 rounded-xl border-none focus:ring-2 focus:ring-rose-500 transition-all"
                 />
               </div>
             </div>
             
-            {tripState.error && (
-                <p className="text-red-500 text-[0.75rem] px-1 animate-in fade-in">{tripState.error}</p>
-            )}
+            {tripState.error && <p className="text-red-500 text-[0.75rem] px-1">{tripState.error}</p>}
             
-            <div className="flex gap-2 mt-2">
+            <div className="flex gap-2 mt-1">
               <button 
                 onClick={calculateTrip}
-                disabled={tripState.isLoading || !tripState.destination}
-                className="flex-1 bg-blue-600 text-white font-medium py-2.5 rounded-xl text-[0.875rem] hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={tripState.isLoading}
+                className="flex-1 bg-black text-white font-semibold py-3 rounded-xl text-[0.875rem] hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center gap-2"
               >
-                {tripState.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {tripState.isLoading ? "Calculating..." : "Find Route & Chargers"}
+                {tripState.isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Plan Route"}
               </button>
               {tripState.routeData && (
-                <button 
-                  onClick={() => setTripState(s => ({ ...s, routeData: null, destination: "", origin: "" }))}
-                  className="px-4 bg-white text-muted-foreground font-medium py-2.5 rounded-xl text-[0.875rem] hover:bg-muted transition-colors border border-border"
-                >
-                  Clear
+                <button onClick={() => setTripState(s => ({ ...s, routeData: null }))} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200">
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -453,64 +509,44 @@ export function MapPage() {
         )}
       </div>
 
-      {/* Map Container */}
-      <div ref={mapRef} className="flex-1 relative z-0" />
+      {/* Map */}
+      <div ref={mapContainerRef} className="flex-1 z-0" />
 
-      {/* Selected Charger Detail Card */}
+      {/* Charger Details Card */}
       {selectedCharger && (
-        <div className="absolute bottom-4 left-3 right-3 z-[1000] animate-in slide-in-from-bottom-5">
-          <div className="bg-white rounded-2xl shadow-xl border border-border overflow-hidden">
-            <button
-              onClick={() => setSelectedCharger(null)}
-              className="absolute top-2 right-2 z-10 w-7 h-7 bg-black/30 hover:bg-black/50 transition-colors rounded-full flex items-center justify-center backdrop-blur-sm"
-            >
-              <X className="w-3.5 h-3.5 text-white" />
+        <div className="absolute bottom-6 left-4 right-4 z-20 animate-in slide-in-from-bottom-8 duration-300">
+          <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col">
+            <button onClick={() => setSelectedCharger(null)} className="absolute top-3 right-3 z-30 p-2 bg-slate-100/50 hover:bg-slate-100 rounded-full transition-colors">
+              <X className="w-4 h-4 text-slate-800" />
             </button>
-            <div className="flex gap-3 p-3">
-              <div className="w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 shadow-sm relative">
-                <ImageWithFallback
-                  src={selectedCharger.image}
-                  alt={selectedCharger.title}
-                  className="w-full h-full object-cover"
-                />
+            <div className="flex gap-4 p-4">
+              <div className="w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg relative bg-slate-100">
+                <ImageWithFallback src={selectedCharger.image} alt={selectedCharger.title} className="w-full h-full object-cover" />
               </div>
-              <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+              <div className="flex-1 flex flex-col justify-between py-1">
                 <div>
-                  <div className="flex items-start justify-between gap-1">
-                    <h3 className="text-[0.9375rem] truncate text-foreground" style={{ fontWeight: 600 }}>
-                      {selectedCharger.title}
-                    </h3>
-                    {selectedCharger.verified && (
-                      <Shield className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
-                    )}
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">{selectedCharger.title}</h3>
+                    {selectedCharger.verified && <Shield className="w-4 h-4 text-emerald-500 fill-emerald-50" />}
                   </div>
-                  <p className="text-[0.75rem] text-muted-foreground truncate mt-0.5">
-                    {selectedCharger.address}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <div className="flex items-center gap-0.5 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-[0.6875rem] font-medium">
-                      <Star className="w-3 h-3 fill-amber-500" />
-                      {selectedCharger.rating}
+                  <p className="text-sm text-slate-500 truncate mt-0.5">{selectedCharger.address}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-amber-500 stroke-amber-500" /> {selectedCharger.rating}
                     </div>
-                    <span className="text-[0.6875rem] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded font-medium">
-                      {selectedCharger.connectorType}
-                    </span>
-                    <span className="text-[0.6875rem] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded font-medium flex items-center gap-0.5">
-                      <Zap className="w-3 h-3" />
-                      {selectedCharger.power} kW
+                    <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg text-xs font-bold uppercase tracking-wider">{selectedCharger.connectorType}</span>
+                    <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-slate-400" /> {selectedCharger.power} kW
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
-                  <span className="text-[1.125rem] text-primary block leading-none" style={{ fontWeight: 700 }}>
-                    ₹{selectedCharger.pricePerHour}
-                    <span className="text-[0.75rem] text-muted-foreground ml-0.5" style={{ fontWeight: 500 }}>/hr</span>
-                  </span>
-                  <button
-                    onClick={() => navigate(`/charger/${selectedCharger.id}`)}
-                    className="px-4 py-1.5 bg-primary text-white rounded-lg text-[0.8125rem] font-medium hover:bg-primary/90 transition-colors shadow-sm"
-                  >
-                    Details
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                  <div className="flex flex-col">
+                    <span className="text-2xl font-black text-slate-900 leading-none">₹{selectedCharger.pricePerHour}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">per hour</span>
+                  </div>
+                  <button onClick={() => navigate(`/charger/${selectedCharger.id}`)} className="bg-primary text-white font-bold px-6 py-2.5 rounded-2xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all active:scale-95">
+                    View Details
                   </button>
                 </div>
               </div>
@@ -519,16 +555,17 @@ export function MapPage() {
         </div>
       )}
 
-      {/* Dynamic Floating Info Pill */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-[999] pointer-events-none transition-transform duration-300">
-        {!selectedCharger && (
-          <div className="bg-foreground text-background shadow-xl rounded-full px-4 py-2 border border-border/10 flex items-center gap-2">
-            <span className="text-[0.8125rem] font-medium leading-none">
-              <span className="text-white font-bold">{filtered.length}</span> chargers {tripState.routeData ? 'on route' : 'nearby'}
+      {/* Floating Info */}
+      {!selectedCharger && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 transition-transform duration-300">
+          <div className="bg-slate-900/90 backdrop-blur-md text-white shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-3 border border-white/10">
+            <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] font-black">{filtered.length}</div>
+            <span className="text-xs font-bold tracking-tight">
+              chargers {tripState.routeData ? 'on your route' : 'nearby you'}
             </span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
