@@ -361,39 +361,51 @@ export function MapPage() {
     // Add/Update markers
     filtered.forEach(charger => {
       const isSelected = selectedCharger?.id === charger.id;
-      const color = isSelected ? "#10B981" : charger.available ? "#ffffff" : "#d1d5db";
-      const textColor = isSelected ? "#ffffff" : charger.available ? "#000000" : "#6b7280";
-      const borderColor = isSelected ? "#10B981" : "#e5e7eb";
+      // Active/Available color matching the orange pins in image
+      const pinFill = isSelected ? "#059669" : charger.available ? "#ea580c" : "#9ca3af";
+      const pinStroke = isSelected ? "#047857" : charger.available ? "#c2410c" : "#6b7280";
+      const scale = isSelected ? 'scale(1.15)' : 'scale(1)';
 
       if (markersRef.current[charger.id]) {
         const el = markersRef.current[charger.id].getElement();
-        el.style.backgroundColor = color;
-        el.style.color = textColor;
-        el.style.borderColor = borderColor;
-        el.style.transform = isSelected ? 'scale(1.2)' : 'scale(1)';
+        
+        // Update SVG fills and transform using the inner div
+        const inner = el.querySelector('.marker-inner') as HTMLDivElement;
+        const svgBg = el.querySelector('.marker-bg') as SVGElement;
+        
+        if (svgBg) {
+          svgBg.setAttribute('fill', pinFill);
+          svgBg.setAttribute('stroke', pinStroke);
+        }
+        if (inner) {
+          inner.style.transform = scale;
+        }
       } else {
         const el = document.createElement('div');
         el.className = 'custom-marker';
+        // MapLibre uses CSS translate for positioning, so we style the size but leave transform free
         el.style.cssText = `
-          display: flex; align-items: center; gap: 4px; padding: 4px 8px;
-          border-radius: 9999px; background-color: ${color}; color: ${textColor};
-          border: 1px solid ${borderColor}; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-          font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;
-          position: relative;
-        `;
-        el.innerHTML = `
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-          </svg>
-          <span>₹${charger.pricePerHour}</span>
-          <div style="width: 8px; height: 8px; position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%) rotate(45deg); background-color: inherit; border-right: 1px solid inherit; border-bottom: 1px solid inherit;"></div>
+          width: 32px; height: 40px; cursor: pointer;
         `;
         
-        el.addEventListener('click', () => {
+        // Add an inner div that we can safely transform for hover/selection scaling without conflicting with MapLibre
+        el.innerHTML = `
+        <div class="marker-inner" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform-origin: bottom center; transform: ${scale}">
+          <svg class="marker-bg" viewBox="0 0 24 24" fill="${pinFill}" stroke="${pinStroke}" stroke-width="1.5" style="width: 36px; height: 36px; position: absolute; bottom: 0; left: -2px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.3)); z-index: 0; transition: fill 0.2s, stroke 0.2s;">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#ffffff" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="position: relative; z-index: 1; margin-bottom: 6px;">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        `;
+        
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
           setSelectedCharger(prev => prev?.id === charger.id ? null : charger);
         });
 
-        markersRef.current[charger.id] = new maplibregl.Marker({ element: el })
+        markersRef.current[charger.id] = new maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat([charger.lng, charger.lat])
           .addTo(map);
       }
