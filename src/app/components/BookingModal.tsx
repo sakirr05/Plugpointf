@@ -169,8 +169,8 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
             <label className="text-[0.8125rem] text-muted-foreground mb-2 block" style={{ fontWeight: 500 }}>
               <Clock className="w-3.5 h-3.5 inline mr-1" />Start Time
             </label>
-            <div className="grid grid-cols-4 gap-1.5 mb-4">
-              {timeSlots.slice(0, 12).map((t) => {
+            <div className="grid grid-cols-4 gap-1.5 mb-4 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
+              {timeSlots.map((t) => {
                 const isPast = isTimeInPast(t, selectedDate.date);
                 return (
                   <button 
