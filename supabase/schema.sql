@@ -80,17 +80,33 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 
 -- ============================================================
+-- Waitlist: users waiting for a specific charger
+-- ============================================================
+CREATE TABLE IF NOT EXISTS waitlist (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  charger_id UUID REFERENCES chargers(id) ON DELETE CASCADE,
+  charger_title TEXT,
+  host_id TEXT,
+  user_id TEXT NOT NULL,
+  user_name TEXT,
+  user_email TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
 -- Row Level Security (permissive for MVP)
 -- ============================================================
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chargers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profiles_all" ON profiles FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "chargers_all" ON chargers FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "bookings_all" ON bookings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "reviews_all" ON reviews FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "waitlist_all" ON waitlist FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================
 -- Seed: 6 demo chargers

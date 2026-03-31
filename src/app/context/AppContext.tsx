@@ -15,6 +15,7 @@ import {
   insertReview as dbInsertReview,
   insertCharger,
   upsertProfile,
+  joinWaitlist,
 } from "../../lib/db";
 
 interface AppState {
@@ -35,6 +36,7 @@ interface AppState {
   addReview: (review: Pick<Review, "chargerId" | "userId" | "userName" | "userAvatar" | "rating" | "comment">) => Promise<void>;
   addCharger: (charger: Omit<Charger, "id">) => Promise<Charger | null>;
   refreshBookings: () => Promise<void>;
+  joinWaitlistForCharger: (charger: Charger) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -156,6 +158,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBookings(fresh);
   };
 
+  const joinWaitlistForCharger = async (charger: Charger): Promise<boolean> => {
+    if (!firebaseUser) {
+      console.warn("[PlugPoint] joinWaitlistForCharger called without an authenticated user");
+      return false;
+    }
+    const ok = await joinWaitlist({
+      chargerId: charger.id,
+      chargerTitle: charger.title,
+      hostId: charger.ownerId,
+      userId: firebaseUser.uid,
+      userName: firebaseUser.displayName || "User",
+      userEmail: firebaseUser.email || "",
+    });
+    return ok;
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -176,6 +194,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addReview,
         addCharger,
         refreshBookings,
+        joinWaitlistForCharger,
       }}
     >
       {children}

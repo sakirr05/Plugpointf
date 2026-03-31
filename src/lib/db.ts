@@ -208,6 +208,31 @@ async function recalcChargerRating(chargerId: string) {
     .eq("id", chargerId);
 }
 
+// ─── Waitlist ───────────────────────────────────────────────────
+
+export async function joinWaitlist(params: {
+  chargerId: string;
+  chargerTitle: string;
+  hostId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+}): Promise<boolean> {
+  const { error } = await supabase.from("waitlist").insert({
+    charger_id: params.chargerId,
+    charger_title: params.chargerTitle,
+    host_id: params.hostId,
+    user_id: params.userId,
+    user_name: params.userName,
+    user_email: params.userEmail,
+  });
+  if (error) {
+    console.error("joinWaitlist:", error.message);
+    return false;
+  }
+  return true;
+}
+
 // ─── Profiles ─────────────────────────────────────────────────
 
 export async function upsertProfile(p: {

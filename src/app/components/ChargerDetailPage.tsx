@@ -27,10 +27,12 @@ import { BookingModal } from "./BookingModal";
 export function ChargerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { chargers, reviews } = useApp();
+  const { chargers, reviews, isAuthenticated, joinWaitlistForCharger } = useApp();
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [joiningWaitlist, setJoiningWaitlist] = useState(false);
+  const [waitlistJoined, setWaitlistJoined] = useState(false);
 
   const charger = chargers.find((c) => c.id === id);
   if (!charger) {
@@ -52,6 +54,23 @@ export function ChargerDetailPage() {
   const displayedReviews = showAllReviews
     ? chargerReviews
     : chargerReviews.slice(0, 3);
+
+  const handleJoinWaitlist = async () => {
+    if (!isAuthenticated) {
+      navigate("/auth");
+      return;
+    }
+    if (waitlistJoined || joiningWaitlist) return;
+    setJoiningWaitlist(true);
+    try {
+      const ok = await joinWaitlistForCharger(charger);
+      if (ok) {
+        setWaitlistJoined(true);
+      }
+    } finally {
+      setJoiningWaitlist(false);
+    }
+  };
 
   return (
     <div className="pb-24">
@@ -329,18 +348,28 @@ export function ChargerDetailPage() {
             </span>
             <span className="text-[0.8125rem] text-muted-foreground"> / hour</span>
           </div>
-          <button
-            onClick={() => setShowBooking(true)}
-            disabled={!charger.available}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[0.9375rem] transition-colors ${
-              charger.available
-                ? "bg-primary text-white hover:bg-primary/90"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            {charger.available ? "Book Now" : "Unavailable"}
-          </button>
+          {charger.available ? (
+            <button
+              onClick={() => setShowBooking(true)}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-[0.9375rem] bg-primary text-white hover:bg-primary/90 transition-colors"
+            >
+              <Calendar className="w-4 h-4" />
+              Book Now
+            </button>
+          ) : (
+            <button
+              onClick={handleJoinWaitlist}
+              disabled={waitlistJoined || joiningWaitlist}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[0.9375rem] transition-colors ${
+                waitlistJoined
+                  ? "bg-emerald-600 text-white"
+                  : "bg-gray-900 text-white"
+              } ${joiningWaitlist ? "opacity-70" : ""}`}
+            >
+              <Calendar className="w-4 h-4" />
+              {waitlistJoined ? "On Waitlist" : joiningWaitlist ? "Joining..." : "Join Waitlist"}
+            </button>
+          )}
         </div>
       </div>
 
