@@ -39,22 +39,30 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
   const [step, setStep] = useState<Step>("datetime");
   const [selectedDate, setSelectedDate] = useState(dates[0]);
   
-  // Helper to check if a time slot has passed
+  // --- TIME VALIDATION HELPERS ---
+  // This tricky function checks if a specific hour has already passed on "Today".
+  // For example, if it's 1:00 PM now, we shouldn't allow a 9:00 AM booking.
   const isTimeInPast = (timeStr: string, dateStr: string) => {
+    // 1. Get today's date in "MMM d" format (like "Oct 12")
     const today = format(new Date(), "MMM d");
+    
+    // 2. If the user picked a future date (not today), then ALL times are valid.
     if (dateStr !== today) return false;
 
+    // 3. Convert the "timeStr" (like "2:00 PM") into a real JavaScript Date object
     const now = new Date();
     const [time, modifier] = timeStr.split(" ");
     let [hours, minutes] = time.split(":").map(Number);
     
+    // AM/PM logic: 1 PM is 13:00, 12 AM is 00:00
     if (modifier === "PM" && hours !== 12) hours += 12;
     if (modifier === "AM" && hours === 12) hours = 0;
     
     const slotTime = new Date();
     slotTime.setHours(hours, minutes || 0, 0, 0);
     
-    // Give a 15 min buffer to account for the booking process
+    // 4. We compare the slot's time to right now. 
+    // We add a 15-minute buffer so you have time to finish typing before the slot "expires".
     return slotTime.getTime() < now.getTime() - (15 * 60 * 1000);
   };
 
@@ -121,29 +129,44 @@ export function BookingModal({ charger, onClose }: BookingModalProps) {
   };
 
   return (
+    // fixed inset-0: makes the dark background fill the whole screen
+    // z-50: ensures the modal stays on top of the map
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      
+      {/* The dark semi-transparent overlay */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      
+      {/* The White Modal Content */}
+      {/* w-full: fills the width on mobile */}
+      {/* sm:max-w-md: limits width to 448px on tablets/laptops */}
+      {/* rounded-t-2xl: adds rounded corners only at the top (looks like a slide-up sheet on mobile) */}
       <div className="relative bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
+        
+        {/* Header Block */}
+        {/* sticky top-0: keeps the header visible even if the modal has long content */}
         <div className="sticky top-0 bg-white border-b border-border px-4 py-3 flex items-center justify-between z-10">
           {step === "payment" ? (
+             // Shows a back arrow if we are on the payment screen
             <button onClick={() => setStep("datetime")}>
               <ChevronLeft className="w-5 h-5" />
             </button>
           ) : (
             <div className="w-5" />
           )}
+          
           <h3 className="text-[0.9375rem]" style={{ fontWeight: 600 }}>
             {step === "datetime" ? "Select Date & Time" : step === "payment" ? "Payment" : "Booking Confirmed!"}
           </h3>
+          
           <button onClick={onClose}>
             <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
-        {/* Step 1: Date & Time */}
+        {/* STEP 1: DATE & TIME SELECTION */}
         {step === "datetime" && (
           <div className="p-4">
+            {/* Simple card showing which charger you are booking */}
             <div className="flex items-center gap-3 p-3 bg-secondary rounded-xl mb-4">
               <Zap className="w-5 h-5 text-primary" />
               <div className="flex-1">

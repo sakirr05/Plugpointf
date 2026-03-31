@@ -1,11 +1,21 @@
+// We import standard React hooks: 
+// - createContext & useContext: to share data (like user info) across all screens
+// - useState: to store data that can change (like the list of chargers)
+// - useEffect: to run code automatically (like fetching data when the app starts)
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
+
+// These "types" define what a User or a Charger object must look like
 import {
   type User,
   type Charger,
   type Booking,
   type Review,
 } from "../data/mock-data";
+
+// This hook handles the technical details of Firebase login/logout
 import { useFirebaseAuth } from "../../hooks/useFirebaseAuth";
+
+// These are our database helper functions (Supabase) to save/load data
 import {
   fetchChargers,
   fetchBookings,
@@ -58,18 +68,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Load public data (chargers + reviews) on mount
+  // --- STEP 1: INITIAL DATA LOAD ---
+  // This runs exactly once when the app first opens.
+  // It fetches all chargers and reviews from our Supabase database.
   useEffect(() => {
+    // Promise.all runs multiple fetch requests at the same time for speed
     Promise.all([fetchChargers(), fetchReviews()]).then(([c, r]) => {
-      setChargers(c);
-      setReviews(r);
-      setDataLoading(false);
+      setChargers(c); // Store the chargers in our global state
+      setReviews(r);  // Store the reviews
+      setDataLoading(false); // Stop showing the loading spinner
     });
   }, []);
 
-  // Sync Firebase user → local user + Supabase profile
+  // --- STEP 2: USER SYNC ---
+  // Every time the Firebase login status changes (logged in or out), 
+  // we update our local "User" object so the rest of the app knows who is browsing.
   useEffect(() => {
     if (firebaseUser) {
+      // If a user is logged in, create a standard "User" object
       const appUser: User = {
         id: firebaseUser.uid,
         name: firebaseUser.displayName || "User",
@@ -83,7 +99,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         verified: !!firebaseUser.emailVerified,
       };
       setUser(appUser);
-      // Sync to Supabase
+      
+      // We also sync this info to our own Supabase 'profiles' table 
+      // so we can store extra details like their phone number or custom avatar.
       upsertProfile({
         id: firebaseUser.uid,
         name: appUser.name,
@@ -91,13 +109,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         email: appUser.email,
         phone: appUser.phone,
       });
-      // Load their bookings
+
+      // Finally, load all the bookings that belong to this specific user.
       fetchBookings(firebaseUser.uid).then(setBookings);
     } else {
+      // If logged out, clear the user and their bookings
       setUser(null);
       setBookings([]);
     }
-  }, [firebaseUser]);
+  }, [firebaseUser]); // This effect re-runs only if firebaseUser changes
 
   const login = async (email: string, password: string) => {
     await firebaseLogin(email, password);
@@ -158,43 +178,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBookings(fresh);
   };
 
+  // This function fetches real-world EV chargers near a specific Latitude/Longitude.
+  // We use the "Open Charge Map" (OCM) API to get this data.
   const fetchPublicChargers = async (lat: number, lng: number) => {
     try {
+      // 1. Get our secret API key from the environment variables (.env file)
       const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
+      
+      // 2. Build the URL. We ask for chargers within 15 KM of the user.
       const url = `https://api.openchargemap.io/v3/poi?output=json&latitude=${lat}&longitude=${lng}&distance=15&distanceunit=KM&maxresults=40` + (apiKey ? `&key=${apiKey}` : '');
+      
       const res = await fetch(url);
-      if (!res.ok) return;
+      if (!res.ok) return; // If the API is down or the key is wrong, just stop here.
       const data = await res.json();
       
+      // 3. The API gives us a lot of raw data. We "map" (transform) it into our 
+      // standard "Charger" format so the rest of our app can display it easily.
       const publicChargers: Charger[] = data.map((poi: any) => ({
-        id: `ocm-${poi.ID}`,
+        id: `ocm-${poi.ID}`, // Prefix with 'ocm-' to avoid ID crashes with mock data
         ownerId: `ocm-network`,
         ownerName: poi.OperatorInfo?.Title || 'Public Station',
-        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop", // placeholder
+        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop", 
         ownerRating: 4.0,
         title: poi.AddressInfo?.Title || 'Public EV Charger',
-        description: poi.GeneralComments || "Public charging station provided via Open Charge Map. Pricing and availability may vary based on the network operator.",
-        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop", // placeholder
+        description: poi.GeneralComments || "Public charging station provided via Open Charge Map.",
+        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop", 
         address: poi.AddressInfo?.AddressLine1 || 'Public Location',
         city: poi.AddressInfo?.Town || '',
         lat: poi.AddressInfo?.Latitude,
         lng: poi.AddressInfo?.Longitude,
         connectorType: poi.Connections?.[0]?.ConnectionType?.Title || 'Universal',
         power: poi.Connections?.[0]?.PowerKW || 7.2,
-        pricePerHour: 100, // mock fallback
+        pricePerHour: 100, // Standard price since API doesn't always provide it
         pricePerKwh: 15,
         available: true,
         availableHours: "24/7",
         rating: 4.5,
         reviewCount: 0,
         amenities: ["Public Access"],
-        instructions: poi.AddressInfo?.AccessComments || "Public usage. Follow operator instructions on site.",
+        instructions: poi.AddressInfo?.AddressLine1 || "Public usage. Follow operator instructions on site.",
         verified: true,
       }));
 
-      // Merge and avoid duplicates
+      // 4. Merge the new data with what we already have.
       setChargers(prev => {
         const existingIds = new Set(prev.map(c => c.id));
+        // Only add chargers we haven't seen before to avoid showing duplicates on the map
         const newChargers = publicChargers.filter(c => !existingIds.has(c.id));
         return [...prev, ...newChargers];
       });
@@ -203,11 +232,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // This is a special version that searches for chargers along a driving path (Polyline).
   const fetchPublicChargersForRoute = async (polyline: string) => {
     try {
       const apiKey = (import.meta as any).env.VITE_OCM_API_KEY || '';
-      // distance is in km, adding a 5km buffer to the polyline route
+      
+      // We pass the 'polyline' string. The API finds chargers within 5 KM of that line.
       const url = `https://api.openchargemap.io/v3/poi?output=json&polyline=${encodeURIComponent(polyline)}&distance=5&distanceunit=KM&maxresults=100` + (apiKey ? `&key=${apiKey}` : '');
+      
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
@@ -216,29 +248,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: `ocm-${poi.ID}`,
         ownerId: `ocm-network`,
         ownerName: poi.OperatorInfo?.Title || 'Public Station',
-        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop", // placeholder
+        ownerAvatar: "https://images.unsplash.com/photo-1548625361-9d10e8c8942b?w=150&h=150&fit=crop",
         ownerRating: 4.0,
         title: poi.AddressInfo?.Title || 'Public EV Charger',
-        description: poi.GeneralComments || "Public charging station provided via Open Charge Map. Pricing and availability may vary based on the network operator.",
-        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop", // placeholder
+        description: poi.GeneralComments || "Public charging station provided via Open Charge Map.",
+        image: "https://images.unsplash.com/photo-1593941707882-a5bba14938c7?w=1080&h=720&fit=crop",
         address: poi.AddressInfo?.AddressLine1 || 'Public Location',
         city: poi.AddressInfo?.Town || '',
         lat: poi.AddressInfo?.Latitude,
         lng: poi.AddressInfo?.Longitude,
         connectorType: poi.Connections?.[0]?.ConnectionType?.Title || 'Universal',
         power: poi.Connections?.[0]?.PowerKW || 7.2,
-        pricePerHour: 100, // mock fallback
+        pricePerHour: 100,
         pricePerKwh: 15,
         available: true,
         availableHours: "24/7",
         rating: 4.5,
         reviewCount: 0,
-        amenities: ["Public Access", "On Route"],
+        amenities: ["Public Access", "On Route"], // Tag them so we know they are route-specific
         instructions: poi.AddressInfo?.AccessComments || "Public usage. Follow operator instructions on site.",
         verified: true,
       }));
 
-      // Merge and avoid duplicates
+      // 5. Again, merge without duplicates
       setChargers(prev => {
         const existingIds = new Set(prev.map(c => c.id));
         const newChargers = publicChargers.filter(c => !existingIds.has(c.id));

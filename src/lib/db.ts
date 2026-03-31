@@ -1,8 +1,15 @@
+// This file is the "Bridge" between our App and our Database (Supabase).
+// We use these functions to save and load data permanently.
+
 import { supabase } from "../config/supabase";
 import type { Charger, Booking, Review } from "../app/data/mock-data";
 import { format } from "date-fns";
 
-// ─── Mappers (Supabase snake_case → app camelCase) ───────────
+/**
+ * --- WHAT ARE MAPPERS? ---
+ * Our database uses "snake_case" (like owner_id) but React likes "camelCase" (like ownerId).
+ * These "Map" functions act as translators between the two worlds.
+ */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapCharger(row: any): Charger {
@@ -68,21 +75,30 @@ function mapReview(row: any): Review {
   };
 }
 
-// ─── Chargers ────────────────────────────────────────────────
+// ─── CHARGERS (THE STATIONS) ──────────────────────────────────
 
+// This function downloads EVERY charging station we have in the database.
 export async function fetchChargers(): Promise<Charger[]> {
   const { data, error } = await supabase
-    .from("chargers")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) { console.error("fetchChargers:", error.message); return []; }
+    .from("chargers") // Look in the 'chargers' table
+    .select("*")      // Grab every column (*)
+    .order("created_at", { ascending: false }); // Show newest first
+    
+  if (error) { 
+    console.error("fetchChargers:", error.message); 
+    return []; 
+  }
+  
+  // Send the raw database rows through our "translator" (mapCharger)
   return (data ?? []).map(mapCharger);
 }
 
+// This function saves a NEW charger when a user lists their home station.
 export async function insertCharger(charger: Omit<Charger, "id">): Promise<Charger | null> {
   const { data, error } = await supabase
     .from("chargers")
     .insert({
+      // We manually translate each field so the database understands it
       owner_id: charger.ownerId,
       owner_name: charger.ownerName,
       owner_avatar: charger.ownerAvatar,
@@ -106,8 +122,9 @@ export async function insertCharger(charger: Omit<Charger, "id">): Promise<Charg
       instructions: charger.instructions,
       verified: charger.verified,
     })
-    .select()
-    .single();
+    .select() // Ask Supabase to send back the saved record (including its new ID)
+    .single(); // We only expect one row back
+    
   if (error) { console.error("insertCharger:", error.message); return null; }
   return mapCharger(data);
 }
@@ -208,8 +225,10 @@ async function recalcChargerRating(chargerId: string) {
     .eq("id", chargerId);
 }
 
-// ─── Profiles ─────────────────────────────────────────────────
+// ─── PROFILES (USER INFO) ──────────────────────────────────────
 
+// "Upsert" is a mix of Update + Insert.
+// If the user already exists, update their info. If they are new, create them!
 export async function upsertProfile(p: {
   id: string; name: string; avatar: string; email: string; phone: string;
 }) {
@@ -220,8 +239,9 @@ export async function upsertProfile(p: {
       avatar_url: p.avatar,
       email: p.email,
       phone: p.phone,
-      joined_date: format(new Date(), "MMMM yyyy"),
+      joined_date: format(new Date(), "MMMM yyyy"), // e.g. "October 2025"
     },
+    // If the 'id' matches an existing user, just overwrite that row
     { onConflict: "id" }
   );
   if (error) console.error("upsertProfile:", error.message);

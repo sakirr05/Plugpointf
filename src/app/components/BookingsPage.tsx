@@ -16,15 +16,28 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { ReviewModal } from "./ReviewModal";
 import type { Booking } from "../data/mock-data";
 
+// These are the categories a booking can fall into
 const tabs = ["All", "Upcoming", "Active", "Completed", "Cancelled"] as const;
 
+/**
+ * --- THE BOOKINGS PAGE ---
+ * This is the user's dashboard where they can see all their 
+ * charging sessions. We use "Tabs" to help them filter 
+ * by status (e.g., only show finished trips).
+ */
 export function BookingsPage() {
   const navigate = useNavigate();
+  
+  // cancelBooking is a function from AppContext that talks to the database
   const { bookings, cancelBooking } = useApp();
+  
+  // --- UI STATE ---
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("All");
-  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
-  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null);
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null); // To open the Review popup
+  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null); // To open the "Are you sure?" popup
 
+  // --- FILTERING ---
+  // If "All" is selected, show everything. Otherwise, only show matches.
   const filtered =
     activeTab === "All"
       ? bookings
@@ -32,77 +45,86 @@ export function BookingsPage() {
           (b) => b.status === activeTab.toLowerCase()
         );
 
+  // --- STYLE CONFIGURATION ---
+  // Depending on the status, we change the color and icon of the status badge.
   const statusConfig = {
     upcoming: {
-      color: "bg-blue-100 text-blue-700",
+      color: "bg-blue-50 text-blue-600 border-blue-100",
       icon: Calendar,
       label: "Upcoming",
     },
     active: {
-      color: "bg-emerald-100 text-emerald-700",
+      color: "bg-emerald-50 text-emerald-600 border-emerald-100",
       icon: Zap,
-      label: "Active",
+      label: "Charging Now",
     },
     completed: {
-      color: "bg-gray-100 text-gray-600",
+      color: "bg-slate-100 text-slate-500 border-slate-200",
       icon: CheckCircle,
-      label: "Completed",
+      label: "Finished",
     },
     cancelled: {
-      color: "bg-red-100 text-red-600",
+      color: "bg-red-50 text-red-600 border-red-100",
       icon: XCircle,
       label: "Cancelled",
     },
   };
 
   return (
-    <div className="pb-4">
-      <div className="px-4 pt-4 pb-2">
-        <h1 className="text-[1.25rem]" style={{ fontWeight: 700 }}>My Bookings</h1>
-        <p className="text-[0.8125rem] text-muted-foreground mt-0.5">
-          {bookings.length} total booking{bookings.length !== 1 ? "s" : ""}
+    <div className="pb-4 bg-slate-50 min-h-full">
+      
+      {/* ─── PAGE HEADER ─── */}
+      <div className="px-4 pt-6 pb-4 bg-white border-b border-slate-100">
+        <h1 className="text-[1.25rem] font-bold text-slate-900">My Bookings</h1>
+        <p className="text-[0.8125rem] text-slate-400 mt-1 font-medium">
+          Manage your current and past charging sessions
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 px-4 overflow-x-auto no-scrollbar mb-4">
+      {/* ─── TABS (HORIZONTAL SCROLL) ─── */}
+      <div className="flex gap-2 px-4 py-4 overflow-x-auto no-scrollbar bg-white shadow-sm">
         {tabs.map((tab) => {
+          // Calculate count per tab to show to the user (e.g. "Completed (5)")
           const count =
             tab === "All"
               ? bookings.length
               : bookings.filter(
                   (b) => b.status === tab.toLowerCase()
                 ).length;
+          
           return (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap transition-colors ${
+              // whitespace-nowrap: prevents the tab text from wrapping to a second line
+              className={`px-4 py-2 rounded-xl text-[0.75rem] whitespace-nowrap transition-all font-bold border ${
                 activeTab === tab
-                  ? "bg-primary text-white"
-                  : "bg-muted text-muted-foreground"
+                  ? "bg-primary text-white border-primary shadow-md shadow-primary/20"
+                  : "bg-white text-slate-400 border-slate-100"
               }`}
             >
-              {tab} ({count})
+              {tab} <span className="opacity-60 ml-0.5">{count}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Booking Cards */}
+      {/* ─── BOOKING LIST ─── */}
       {filtered.length === 0 ? (
-        <div className="text-center py-12 px-4">
-          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">No bookings found</p>
+        // Empty State: showing this if there's nothing to list
+        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+          <Calendar className="w-16 h-16 text-slate-200 mb-4" />
+          <p className="text-slate-400 font-medium">No bookings found in this category</p>
           <button
             onClick={() => navigate("/")}
-            className="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-[0.875rem]"
+            className="mt-4 px-8 py-3 bg-primary text-white rounded-xl text-[0.875rem] font-bold shadow-lg"
           >
             Find Chargers
           </button>
         </div>
       ) : (
-        <div className="px-4 space-y-3">
+        // space-y-4: adds even space between every card automatically
+        <div className="px-4 py-4 space-y-4">
           {filtered.map((booking) => {
             const config = statusConfig[booking.status];
             const StatusIcon = config.icon;
@@ -110,124 +132,123 @@ export function BookingsPage() {
             return (
               <div
                 key={booking.id}
-                className="bg-card rounded-xl border border-border overflow-hidden"
+                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
               >
-                <div className="flex gap-3 p-3">
-                  <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                {/* Upper Half: Image + Basic Info */}
+                <div className="flex gap-4 p-4">
+                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-sm">
                     <ImageWithFallback
                       src={booking.chargerImage}
                       alt={booking.chargerTitle}
                       className="w-full h-full object-cover"
                     />
                   </div>
+                  
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <h3
-                        className="text-[0.875rem] truncate"
-                        style={{ fontWeight: 600 }}
-                      >
+                      <h3 className="text-[0.9375rem] font-bold text-slate-900 truncate">
                         {booking.chargerTitle}
                       </h3>
+                      {/* The Status Badge */}
                       <span
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6875rem] flex-shrink-0 ${config.color}`}
-                        style={{ fontWeight: 500 }}
+                        className={`flex items-center gap-1.2 px-2 py-0.5 rounded-lg text-[0.6rem] uppercase tracking-wider font-black border ${config.color}`}
                       >
                         <StatusIcon className="w-3 h-3" />
                         {config.label}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 text-muted-foreground mt-0.5">
-                      <MapPin className="w-3 h-3" />
-                      <span className="text-[0.75rem] truncate">
+                    
+                    <div className="flex items-center gap-1 text-slate-400 mt-1">
+                      <MapPin className="w-3 h-3 flex-shrink-0" />
+                      <span className="text-[0.7rem] truncate font-medium">
                         {booking.chargerAddress}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <span className="text-[0.75rem] text-muted-foreground flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
+                    
+                    {/* Date and Time Row */}
+                    <div className="flex items-center gap-3 mt-2.5">
+                      <span className="text-[0.7rem] text-slate-600 font-bold flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
                         {booking.date}
                       </span>
-                      <span className="text-[0.75rem] text-muted-foreground flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
+                      <span className="text-[0.7rem] text-slate-600 font-bold flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-slate-400" />
                         {booking.startTime} - {booking.endTime}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Bottom Row */}
-                <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-t border-border">
+                {/* Info Bar (Connector, Power, Cost) */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-t border-slate-100">
                   <div className="flex items-center gap-3">
-                    <span className="text-[0.75rem] text-muted-foreground">
+                    <span className="text-[0.7rem] text-slate-500 font-bold uppercase">
                       {booking.connectorType}
                     </span>
-                    <span className="text-[0.75rem] text-muted-foreground flex items-center gap-0.5">
-                      <Zap className="w-3 h-3" />
+                    <span className="text-[0.7rem] text-slate-500 font-bold flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-slate-300" />
                       {booking.power} kW
                     </span>
-                    <span className="text-[0.75rem] text-muted-foreground">
-                      {booking.duration}h
-                    </span>
                   </div>
-                  <span className="text-[0.9375rem] text-primary" style={{ fontWeight: 700 }}>
+                  <span className="text-[1rem] text-primary font-black">
                     ₹{booking.totalCost}
                   </span>
                 </div>
 
-                {/* Actions */}
+                {/* ACTION BUTTONS (Contextual) */}
+                
+                {/* 1. Upcoming: Show View Details & Cancel */}
                 {booking.status === "upcoming" && (
-                  <div className="flex gap-2 px-3 pb-3">
+                  <div className="flex gap-2 px-4 pb-4 pt-1">
                     <button
-                      onClick={() =>
-                        navigate(`/charger/${booking.chargerId}`)
-                      }
-                      className="flex-1 py-2 text-[0.8125rem] border border-border rounded-lg flex items-center justify-center gap-1"
+                      onClick={() => navigate(`/charger/${booking.chargerId}`)}
+                      className="flex-1 py-2.5 text-[0.8rem] font-bold border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors"
                     >
-                      View Details
-                      <ChevronRight className="w-3 h-3" />
+                      View Station
                     </button>
                     <button
                       onClick={() => setCancelConfirm(booking.id)}
-                      className="flex-1 py-2 text-[0.8125rem] border border-destructive text-destructive rounded-lg"
+                      className="flex-1 py-2.5 text-[0.8rem] font-bold border border-red-100 text-red-500 rounded-xl hover:bg-red-50 transition-colors"
                     >
-                      Cancel
+                      Cancel Booking
                     </button>
                   </div>
                 )}
 
+                {/* 2. Active: Show a progress bar simulation */}
                 {booking.status === "active" && (
-                  <div className="px-3 pb-3">
-                    <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded-lg">
-                      <Zap className="w-4 h-4 text-emerald-600" />
+                  <div className="px-4 pb-4 pt-2">
+                    <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100/50">
                       <div className="flex-1">
-                        <p className="text-[0.75rem] text-emerald-700" style={{ fontWeight: 600 }}>
-                          Charging in progress
-                        </p>
-                        <div className="w-full bg-emerald-200 rounded-full h-1.5 mt-1">
-                          <div className="bg-emerald-500 h-1.5 rounded-full w-[65%]" />
+                        <div className="flex justify-between items-center mb-1.5">
+                           <p className="text-[0.7rem] text-emerald-700 font-black uppercase tracking-widest">
+                            Charging Session Live
+                           </p>
+                           <span className="text-[0.8rem] text-emerald-700 font-black">72%</span>
+                        </div>
+                        {/* Progress Bar background */}
+                        <div className="w-full bg-emerald-100/50 rounded-full h-1.5">
+                          {/* Progress Bar level */}
+                          <div className="bg-emerald-500 h-1.5 rounded-full w-[72%] shadow-[0_0_8px_rgba(16,185,129,0.3)]" />
                         </div>
                       </div>
-                      <span className="text-[0.75rem] text-emerald-700" style={{ fontWeight: 600 }}>
-                        65%
-                      </span>
                     </div>
                   </div>
                 )}
 
+                {/* 3. Completed: Show Leave Review */}
                 {booking.status === "completed" && (
-                  <div className="flex gap-2 px-3 pb-3">
+                  <div className="flex gap-2 px-4 pb-4 pt-1">
                     <button
                       onClick={() => setReviewBooking(booking)}
-                      className="flex-1 py-2 text-[0.8125rem] bg-primary text-white rounded-lg flex items-center justify-center gap-1"
+                      className="flex-1 py-2.5 text-[0.8rem] font-bold bg-primary text-white rounded-xl shadow-lg shadow-primary/10 flex items-center justify-center gap-2"
                     >
-                      <Star className="w-3.5 h-3.5" />
-                      Leave Review
+                      <Star className="w-3.5 h-3.5 fill-white" />
+                      Rate Experience
                     </button>
                     <button
-                      onClick={() =>
-                        navigate(`/charger/${booking.chargerId}`)
-                      }
-                      className="flex-1 py-2 text-[0.8125rem] border border-border rounded-lg"
+                      onClick={() => navigate(`/charger/${booking.chargerId}`)}
+                      className="flex-1 py-2.5 text-[0.8rem] font-bold border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors"
                     >
                       Book Again
                     </button>
@@ -239,41 +260,40 @@ export function BookingsPage() {
         </div>
       )}
 
-      {/* Cancel Confirmation */}
+      {/* ─── CANCEL CONFIRMATION POPUP ─── */}
       {cancelConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setCancelConfirm(null)}
-          />
-          <div className="relative bg-white rounded-2xl p-6 mx-4 max-w-sm w-full text-center">
-            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
-            <h3 className="text-[1.0625rem]" style={{ fontWeight: 600 }}>Cancel Booking?</h3>
-            <p className="text-[0.8125rem] text-muted-foreground mt-1">
-              Are you sure? A full refund will be issued to your payment method.
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCancelConfirm(null)} />
+          <div className="relative bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+               <AlertCircle className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-[1.125rem] font-bold text-slate-900">Cancel Booking?</h3>
+            <p className="text-[0.875rem] text-slate-500 mt-2">
+              Are you sure you want to cancel? You will receive a full refund in your wallet.
             </p>
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setCancelConfirm(null)}
-                className="flex-1 py-2.5 border border-border rounded-xl text-[0.875rem]"
+                className="flex-1 py-3 border border-slate-100 rounded-2xl text-[0.875rem] font-bold text-slate-400"
               >
-                Keep Booking
+                Keep it
               </button>
               <button
                 onClick={() => {
-                  cancelBooking(cancelConfirm);
+                  cancelBooking(cancelConfirm); // Tell the app to cancel this ID in the database
                   setCancelConfirm(null);
                 }}
-                className="flex-1 py-2.5 bg-destructive text-white rounded-xl text-[0.875rem]"
+                className="flex-1 py-3 bg-red-500 text-white rounded-2xl text-[0.875rem] font-bold shadow-lg shadow-red-500/20"
               >
-                Cancel
+                Yes, Cancel
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Review Modal */}
+      {/* Show the Review popup if a completed booking was clicked */}
       {reviewBooking && (
         <ReviewModal
           booking={reviewBooking}

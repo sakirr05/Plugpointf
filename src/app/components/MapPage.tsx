@@ -17,8 +17,12 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import type { Charger } from "../data/mock-data";
 import { encodePolyline } from "../../lib/polyline";
 
-// Map center for Bangalore
-const MAP_CENTER: [number, number] = [77.63, 12.96]; // [lng, lat] for MapLibre
+// --- MAP SETTINGS ---
+// This is the starting point for our map (Bangalore city coordinates)
+const MAP_CENTER: [number, number] = [77.63, 12.96]; // [longitude, latitude]
+
+// We use "MapLibre" to show the map, but we want it to look like Google Maps.
+// This configuration tells MapLibre to pull "tiles" (images of the world) from Google's servers.
 const GOOGLE_MAP_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -40,9 +44,10 @@ const GOOGLE_MAP_STYLE: maplibregl.StyleSpecification = {
   ]
 };
 
-// Distance Calculation Helpers
+// --- MATH HELPERS ---
+// This math formula (Haversine) calculates the real-world distance between two GPS points in kilometers.
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // Earth radius in km
+  const R = 6371; // The Earth's radius is roughly 6371 km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -55,10 +60,12 @@ function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * c;
 }
 
+// This checks how far a charger is from a driving route. 
+// It looks at every point on the route line and finds the closest one.
 function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, number][]) {
   let minDistance = Infinity;
   for (const coord of routeCoords) {
-    // routeCoords from GeoJSON are [lng, lat]
+    // coord[0] is longitude, coord[1] is latitude
     const dist = getDistance(charger.lat, charger.lng, coord[1], coord[0]);
     if (dist < minDistance) minDistance = dist;
   }
@@ -72,19 +79,27 @@ export function MapPage() {
   const queryParams = new URLSearchParams(location.search);
   const tabParam = queryParams.get("tab");
 
+  // --- STATE MANAGEMENT ---
+  // selectedCharger holds the charger the user just tapped on.
   const [selectedCharger, setSelectedCharger] = useState<Charger | null>(null);
+  
+  // These store what filters the user has turned on
   const [filterConnector, setFilterConnector] = useState("All");
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
+  
+  // isNavigating is true when the user hits "Start Journey"
   const [isNavigating, setIsNavigating] = useState(false);
   
-  // Trip Planner State
+  // isTripPanelOpen handles the pop-up where you type Origin & Destination
   const [isTripPanelOpen, setIsTripPanelOpen] = useState(tabParam === "trip");
+  
+  // tripState stores all the data about your planned journey
   const [tripState, setTripState] = useState<{
-    origin: string;
-    destination: string;
-    isLoading: boolean;
-    routeData: any | null;
-    error: string | null;
+    origin: string;      // Starting point text
+    destination: string; // Destination text
+    isLoading: boolean;   // Are we waiting for the route to download?
+    routeData: any | null; // The actual line coordinates to draw on the map
+    error: string | null;  // Any error (like "Location not found")
   }>({
     origin: "",
     destination: "",
@@ -93,10 +108,13 @@ export function MapPage() {
     error: null,
   });
 
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({});
-  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  // --- REFS (Technical) ---
+  // A 'ref' is like a box that keeps a specific object (like the Map) 
+  // between refreshes without triggering the whole page to redraw.
+  const mapContainerRef = useRef<HTMLDivElement>(null); // The <div> where map is built
+  const mapRef = useRef<maplibregl.Map | null>(null);    // The actual map instance
+  const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({}); // All charger pins
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);       // The blue dot for YOU
 
   // Filter logic
   const filtered = chargers.filter((c) => {
@@ -422,22 +440,45 @@ export function MapPage() {
   }, [filtered, selectedCharger]);
 
   return (
+    // relative: helps position child elements exactly where we want them
+    // h-full: makes this container fill the entire height of the screen
+    // flex-col: stacks children (Header, Map, Card) vertically
+    // bg-slate-50: sets a very light grey-blue background color
     <div className="relative h-full flex flex-col overflow-hidden bg-slate-50">
-      {/* Navigation Mode Header */}
+      
+      {/* --- NAVIGATION MODE HEADER --- */}
+      {/* This only shows up when you are driving (isNavigating is true) */}
       {isNavigating && (
+        // absolute: floats this bar on top of the map
+        // top-4: gives it a little gap from the top edge
+        // left-1/2 & -translate-x-1/2: CSS trick to perfectly center horizontally
+        // z-50: ensures it stays on top of markers and pop-ups
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+          {/* bg-white/95: 95% solid white (slightly see-through) */}
+          {/* backdrop-blur: makes the map behind it look blurry (premium glass feel) */}
+          {/* shadow-xl: adds a soft drop shadow to make it pop */}
+          {/* rounded-full: makes the bar look like a pill (circular ends) */}
           <div className="bg-white/95 backdrop-blur shadow-xl rounded-full px-4 py-2 flex items-center gap-3 border border-border">
+            
+            {/* The "Live" Pulse Dot */}
             <span className="flex h-3 w-3 relative">
+              {/* animate-ping: creates that growing circle effect you see on GPS apps */}
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600"></span>
             </span>
+            
             <span className="text-[0.875rem] font-bold">Navigating...</span>
+            
+            {/* A thin vertical separator line */}
             <div className="w-px h-4 bg-border/60 mx-1 border-gray-300"></div>
+            
             <button
                onClick={() => {
-                 setIsNavigating(false);
-                 setTripState(s => ({...s, routeData: null}));
+                 setIsNavigating(false); // Stop the map from following you
+                 setTripState(s => ({...s, routeData: null})); // Clear the blue line
                }}
+               // text-red-600: bright red text for the stop button
+               // hover:bg-red-50: turns soft pink when your mouse is over it
                className="text-[0.8125rem] text-red-600 font-bold hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
             >
               End Trip
@@ -446,17 +487,22 @@ export function MapPage() {
         </div>
       )}
 
-      {/* Start Journey Overlay */}
+      {/* --- START JOURNEY BUTTON --- */}
+      {/* This pops up only AFTER you've planned a route but BEFORE you start driving */}
       {tripState.routeData && !isNavigating && (
         <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8">
           <button 
              onClick={() => {
-               setIsNavigating(true);
+               setIsNavigating(true); // Engages the GPS lock
                if (mapRef.current && userMarkerRef.current) {
                  const location = userMarkerRef.current.getLngLat() || mapRef.current.getCenter();
+                 // flyTo: smoothly glides the camera to your location
+                 // zoom: 16 is close up, pitch: 45 tilts the map 3D style
                  mapRef.current.flyTo({ center: location, zoom: 16, pitch: 45 });
                }
              }}
+             // bg-blue-600: nice bright blue brand color
+             // shadow-blue-600/20: adds a subtle blue glow to the shadow
              className="bg-blue-600 text-white px-8 py-3.5 rounded-full shadow-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-blue-600/20"
           >
             <Navigation className="w-5 h-5 fill-current" />
@@ -575,39 +621,61 @@ export function MapPage() {
       {/* Map */}
       <div ref={mapContainerRef} className="flex-1 z-0" />
 
-      {/* Charger Details Card */}
+      {/* --- CHARGER DETAILS CARD --- */}
+      {/* This is the white card that slides up from the bottom when you tap a marker */}
       {selectedCharger && (
+        // animate-in...: makes the card slide up smoothly from the bottom
         <div className="absolute bottom-6 left-4 right-4 z-20 animate-in slide-in-from-bottom-8 duration-300">
           <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col">
+            
+            {/* The small 'X' button to close the card */}
             <button onClick={() => setSelectedCharger(null)} className="absolute top-3 right-3 z-30 p-2 bg-slate-100/50 hover:bg-slate-100 rounded-full transition-colors">
               <X className="w-4 h-4 text-slate-800" />
             </button>
+
             <div className="flex gap-4 p-4">
+              {/* Charger Image Container */}
+              {/* w-28 h-28: fixed size (about 112 pixels) */}
+              {/* flex-shrink-0: prevents the image from getting squashed if the text is long */}
               <div className="w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg relative bg-slate-100">
                 <ImageWithFallback src={selectedCharger.image} alt={selectedCharger.title} className="w-full h-full object-cover" />
               </div>
+
+              {/* Text Info Container */}
               <div className="flex-1 flex flex-col justify-between py-1">
                 <div>
                   <div className="flex items-center gap-2">
+                    {/* leading-tight: keeps line spacing small for titles */}
+                    {/* truncate: adds '...' if the name is too long for the card */}
                     <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">{selectedCharger.title}</h3>
                     {selectedCharger.verified && <Shield className="w-4 h-4 text-emerald-500 fill-emerald-50" />}
                   </div>
+                  
                   <p className="text-sm text-slate-500 truncate mt-0.5">{selectedCharger.address}</p>
+                  
+                  {/* Badges Row (Rating, Connector, Power) */}
                   <div className="flex items-center gap-2 mt-2">
+                    {/* bg-amber-50: very light yellow background for the star rating */}
                     <div className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1">
                       <Star className="w-3 h-3 fill-amber-500 stroke-amber-500" /> {selectedCharger.rating}
                     </div>
+                    {/* uppercase tracking-wider: makes the text (e.g. CCS) look like a small neat label */}
                     <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg text-xs font-bold uppercase tracking-wider">{selectedCharger.connectorType}</span>
                     <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1">
                       <Zap className="w-3 h-3 text-slate-400" /> {selectedCharger.power} kW
                     </span>
                   </div>
                 </div>
+
+                {/* Footer of the Card: Price + Button */}
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
                   <div className="flex flex-col">
+                    {/* leading-none: removes extra space above/below the big price number */}
                     <span className="text-2xl font-black text-slate-900 leading-none">₹{selectedCharger.pricePerHour}</span>
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">per hour</span>
                   </div>
+                  
+                  {/* navigate(...): goes to the detailed charging station page */}
                   <button onClick={() => navigate(`/charger/${selectedCharger.id}`)} className="bg-primary text-white font-bold px-6 py-2.5 rounded-2xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all active:scale-95">
                     View Details
                   </button>
