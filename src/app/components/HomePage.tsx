@@ -17,15 +17,26 @@ import { useApp } from "../context/AppContext";
 import { ChargerCard } from "./ChargerCard";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 
+// Standard options for the user to choose from
 const connectorTypes = ["All", "J1772", "CCS", "Tesla Wall Connector"];
 const sortOptions = ["Nearest", "Price: Low", "Price: High", "Top Rated"];
 
+/**
+ * --- THE HOME PAGE ---
+ * This is the first screen users see. It's designed to help them
+ * find a charger quickly using a search bar, filters, and a list 
+ * of nearby stations.
+ */
 export function HomePage() {
+  // We grab the list of chargers from our global AppContext
   const { chargers } = useApp();
   const navigate = useNavigate();
+
+  // --- UI STATE ---
+  // These 'useState' hooks remember what the user has typed or clicked.
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedConnector, setSelectedConnector] = useState("All");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(false); // Controls the slide-down filter panel
   const [sortBy, setSortBy] = useState("Nearest");
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [powerLevel, setPowerLevel] = useState("All");
@@ -43,15 +54,23 @@ export function HomePage() {
     verifiedOnly,
   ].filter(Boolean).length;
 
+  // --- FILTERING LOGIC ---
+  // This takes the master list of chargers and narrows it down 
+  // based on what the user is looking for.
   const filtered = chargers
     .filter((c) => {
+      // 1. Search by name, address, or city
       const matchesSearch =
         !searchQuery ||
         c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.city.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      // 2. Filter by plug type (e.g. only show CCS)
       const matchesConnector =
         selectedConnector === "All" || c.connectorType === selectedConnector;
+      
+      // 3. Optional: hide chargers that are currently busy
       const matchesAvailable = !onlyAvailable || c.available;
       const matchesPower =
         powerLevel === "All" ||
@@ -79,25 +98,31 @@ export function HomePage() {
         matchesVerified
       );
     })
+    // 4. Sort the results (e.g. cheapest first)
     .sort((a, b) => {
       if (sortBy === "Price: Low") return a.pricePerHour - b.pricePerHour;
       if (sortBy === "Price: High") return b.pricePerHour - a.pricePerHour;
       if (sortBy === "Top Rated") return b.rating - a.rating;
-      return 0;
+      return 0; // Default: keep database order
     });
 
   const availableCount = chargers.filter((c) => c.available).length;
 
   return (
+    // pb-4: adds 'Padding-Bottom' so content doesn't touch the very bottom of the screen
     <div className="pb-4">
-      {/* Hero Section */}
+      
+      {/* ─── HERO SECTION ─── */}
+      {/* This is the big image at the top with the welcome text */}
       <div className="relative h-52 overflow-hidden">
         <ImageWithFallback
           src="https://images.unsplash.com/photo-1765272088009-100c96a4cd4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVjdHJpYyUyMHZlaGljbGUlMjBjaGFyZ2luZyUyMHN0YXRpb24lMjBtb2Rlcm58ZW58MXx8fHwxNzcxMzcwNTA2fDA&ixlib=rb-4.1.0&q=80&w=1080"
           alt="EV Charging"
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover" // object-cover: makes the image fill the box without stretching
         />
+        {/* The dark overlay makes the white text easier to read on top of the image */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+        
         <div className="absolute inset-0 flex flex-col justify-end p-4">
           <h1 className="text-white text-[1.5rem]" style={{ fontWeight: 700, lineHeight: 1.2 }}>
             Find & share EV
@@ -110,9 +135,11 @@ export function HomePage() {
         </div>
       </div>
 
-      {/* Search Bar */}
+      {/* ─── SEARCH BAR ─── */}
+      {/* -mt-5: pull the search bar UP so it overlaps the bottom of the hero image */}
       <div className="px-4 -mt-5 relative z-10">
         <div className="flex items-center gap-2">
+          {/* flex-1: makes the search input take up all available horizontal space */}
           <div className="flex-1 flex items-center bg-white rounded-xl border border-border shadow-lg px-3 py-2.5">
             <Search className="w-4 h-4 text-muted-foreground mr-2" />
             <input
@@ -120,6 +147,7 @@ export function HomePage() {
               placeholder="Search by location or charger name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              // bg-transparent: removes the input's own background so it matches the white box
               className="flex-1 bg-transparent outline-none text-[0.875rem] placeholder:text-muted-foreground"
             />
             {searchQuery && (
@@ -128,11 +156,13 @@ export function HomePage() {
               </button>
             )}
           </div>
+          
+          {/* Filter Toggle Button */}
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`relative p-2.5 rounded-xl border shadow-lg transition-colors ${
               showFilters
-                ? "bg-primary text-white border-primary"
+                ? "bg-primary text-white border-primary" // Highlight if filters are open
                 : "bg-white text-muted-foreground border-border"
             }`}
           >
@@ -146,7 +176,8 @@ export function HomePage() {
         </div>
       </div>
 
-      {/* Filters Panel */}
+      {/* ─── FILTERS PANEL ─── */}
+      {/* Only renders if 'showFilters' is true */}
       {showFilters && (
         <div className="mx-4 mt-3 p-4 bg-white rounded-xl border border-border shadow-sm">
           <div className="flex items-center justify-between mb-3">
@@ -174,6 +205,7 @@ export function HomePage() {
             </button>
           </div>
 
+          {/* Sort Options List */}
           <div className="mb-3">
             <label className="text-[0.75rem] text-muted-foreground mb-1.5 block" style={{ fontWeight: 500 }}>
               Sort By
@@ -183,6 +215,7 @@ export function HomePage() {
                 <button
                   key={opt}
                   onClick={() => setSortBy(opt)}
+                  // bg-primary vs bg-muted: changes color based on selection
                   className={`px-3 py-1.5 rounded-lg text-[0.75rem] transition-colors ${
                     sortBy === opt
                       ? "bg-primary text-white"
@@ -355,7 +388,8 @@ export function HomePage() {
         </div>
       )}
 
-      {/* Quick Stats */}
+      {/* ─── QUICK STATS ─── */}
+      {/* A horizontal scrolling row of stats about the network */}
       <div className="flex gap-3 px-4 mt-4 overflow-x-auto no-scrollbar">
         {[
           { icon: Bolt, label: "Chargers", value: chargers.length.toString(), color: "bg-emerald-50 text-emerald-600" },
@@ -365,6 +399,7 @@ export function HomePage() {
         ].map((stat) => (
           <div
             key={stat.label}
+            // flex-shrink-0: keeps these boxes from getting squashed when they scroll horizontally
             className="flex items-center gap-2.5 px-3 py-2.5 bg-white rounded-xl border border-border flex-shrink-0"
           >
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${stat.color}`}>
@@ -378,10 +413,12 @@ export function HomePage() {
         ))}
       </div>
 
-      {/* Map CTA */}
+      {/* ─── MAP CTA ─── */}
+      {/* Big gradient button to go to the Map screen */}
       <button
         onClick={() => navigate("/map")}
-        className="mx-4 mt-4 flex items-center justify-between p-3 bg-gradient-to-r from-primary to-emerald-600 rounded-xl text-white"
+        // bg-gradient-to-r: creates a smooth color fade from left to right
+        className="mx-4 mt-4 w-[calc(100%-2rem)] flex items-center justify-between p-3 bg-gradient-to-r from-primary to-emerald-600 rounded-xl text-white shadow-lg"
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
@@ -395,64 +432,27 @@ export function HomePage() {
         <ChevronRight className="w-5 h-5" />
       </button>
 
-      {/* How It Works */}
+      {/* ─── CHARGER LISTINGS ─── */}
       <div className="px-4 mt-6">
-        <h2 className="text-[1.125rem] mb-3" style={{ fontWeight: 600 }}>How It Works</h2>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { icon: Search, step: "1", title: "Find", desc: "Search nearby chargers" },
-            { icon: Clock, step: "2", title: "Book", desc: "Reserve your time slot" },
-            { icon: Zap, step: "3", title: "Charge", desc: "Plug in and power up" },
-          ].map((item) => (
-            <div
-              key={item.step}
-              className="flex flex-col items-center text-center p-3 bg-white rounded-xl border border-border"
-            >
-              <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mb-2">
-                <item.icon className="w-5 h-5 text-primary" />
-              </div>
-              <p className="text-[0.8125rem]" style={{ fontWeight: 600 }}>{item.title}</p>
-              <p className="text-[0.6875rem] text-muted-foreground mt-0.5">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+        <h2 className="text-[1.125rem] mb-3 font-bold">
+          Nearby Chargers
+          <span className="text-muted-foreground text-[0.8125rem] ml-2 font-normal">
+            ({filtered.length})
+          </span>
+        </h2>
 
-      {/* Trust Badges */}
-      <div className="px-4 mt-4">
-        <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-          <Shield className="w-8 h-8 text-primary flex-shrink-0" />
-          <div>
-            <p className="text-[0.8125rem]" style={{ fontWeight: 600 }}>Verified & Trusted</p>
-            <p className="text-[0.75rem] text-muted-foreground">
-              All hosts are identity-verified. Every charger is inspected for safety.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Charger Listings */}
-      <div className="px-4 mt-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[1.125rem]" style={{ fontWeight: 600 }}>
-            Nearby Chargers
-            <span className="text-muted-foreground text-[0.8125rem] ml-2" style={{ fontWeight: 400 }}>
-              ({filtered.length})
-            </span>
-          </h2>
-        </div>
-
+        {/* Empty State: if no chargers match the user's search */}
         {filtered.length === 0 ? (
-          <div className="text-center py-10">
-            <Search className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground text-[0.875rem]">No chargers found</p>
-            <p className="text-muted-foreground text-[0.75rem] mt-1">
-              Try adjusting your filters
-            </p>
+          <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <Search className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-slate-500 text-[0.875rem] font-medium">No chargers found</p>
+            <p className="text-slate-400 text-[0.75rem] mt-1">Try adjusting your filters</p>
           </div>
         ) : (
+          // Grid of actual results
           <div className="flex flex-col gap-5">
             {filtered.map((charger) => (
+              // The 'ChargerCard' is a separate small component that draws the actual card
               <ChargerCard key={charger.id} charger={charger} />
             ))}
           </div>

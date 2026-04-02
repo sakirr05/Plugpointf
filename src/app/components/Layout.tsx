@@ -11,90 +11,122 @@ import {
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 
+// This list defines our bottom navigation bar
 const navItems = [
   { path: "/", icon: Search, label: "Discover" },
   { path: "/map", icon: MapPin, label: "Map" },
+  // This special path includes a ?tab=trip parameter to open the trip planner directly
   { path: "/map?tab=trip", icon: Navigation, label: "Trip" },
   { path: "/list-charger", icon: Plus, label: "List" },
   { path: "/bookings", icon: CalendarDays, label: "Bookings" },
   { path: "/profile", icon: User, label: "Profile" },
 ];
 
+/**
+ * --- THE LAYOUT COMPONENT ---
+ * This is the "Frame" of the entire app. It contains:
+ * 1. The Header at the top (with the Logo)
+ * 2. The Main Content area in the middle (where pages swap in and out)
+ * 3. The Navigation Bar at the bottom
+ */
 export function Layout() {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const location = useLocation(); // Keeps track of which URL we are currently on
+  const navigate = useNavigate(); // Lets us programmatically change the URL
   const { isAuthenticated } = useApp();
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <Toaster position="top-center" />
-      {/* Top Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <Zap className="w-5 h-5 text-primary-foreground" />
+    // h-screen: makes the app exactly the height of the phone screen
+    <div className="flex flex-col h-screen bg-slate-50 selection:bg-primary/30">
+      
+      {/* ─── APP HEADER ─── */}
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-transform" onClick={() => navigate("/")}>
+          {/* Main Logo Icon */}
+          <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+            <Zap className="w-5 h-5 text-white" />
           </div>
-          <span className="text-[1.125rem] tracking-tight" style={{ fontWeight: 700 }}>
+          <span className="text-[1.2rem] tracking-tighter" style={{ fontWeight: 900 }}>
             PlugPoint
           </span>
         </div>
+
+        {/* User Profile / sign-in button */}
         {isAuthenticated ? (
           <button
             onClick={() => navigate("/profile")}
-            className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center"
+            className="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center hover:bg-slate-100 transition-colors"
           >
-            <User className="w-4 h-4 text-primary" />
+            <User className="w-5 h-5 text-slate-400" />
           </button>
         ) : (
           <button
             onClick={() => navigate("/auth")}
-            className="px-4 py-1.5 bg-primary text-primary-foreground rounded-lg text-[0.875rem]"
+            className="px-5 py-2 bg-primary text-white rounded-xl text-[0.8rem] font-black uppercase tracking-widest shadow-lg shadow-primary/20"
           >
             Sign In
           </button>
         )}
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
+      {/* ─── MAIN CONTENT AREA ─── */}
+      {/* flex-1: takes up all the space between the header and nav bar */}
+      {/* overflow-y-auto: allows the content to scroll while the header/nav stay fixed */}
+      <main className="flex-1 overflow-y-auto no-scrollbar">
+        {/* <Outlet /> is a placeholder. React Router replaces this with 
+            whatever page (Home, Map, etc.) matches the current URL. */}
         <Outlet />
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="sticky bottom-0 z-50 bg-white border-t border-border px-2 pb-[env(safe-area-inset-bottom)]">
-        <div className="flex items-center justify-around">
+      {/* ─── BOTTOM NAVIGATION BAR ─── */}
+      <nav className="sticky bottom-0 z-50 bg-white/90 backdrop-blur-xl border-t border-slate-100 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+        <div className="flex items-center justify-around max-w-lg mx-auto">
           {navItems.map((item) => {
+            // Check if this nav item matches the current page we are on
             const isActive =
               location.pathname === item.path ||
               (item.path === "/" && location.pathname === "/");
+            
             const Icon = item.icon;
-            const isList = item.label === "List";
+            const isPlusButton = item.label === "List"; // Special formatting for the center "Plus" button
 
             return (
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center py-2 px-3 min-w-[4rem] transition-colors ${
-                  isList ? "" : isActive ? "text-primary" : "text-muted-foreground"
+                className={`flex flex-col items-center py-2 px-3 min-w-[4.5rem] transition-all relative ${
+                  isPlusButton ? "" : isActive ? "text-primary scale-110" : "text-slate-300"
                 }`}
               >
-                {isList ? (
-                  <div className="w-10 h-10 -mt-5 bg-primary rounded-full flex items-center justify-center shadow-lg shadow-primary/30">
-                    <Icon className="w-5 h-5 text-white" />
+                {/* Special design for the 'List Charger' button */}
+                {isPlusButton ? (
+                  <div className="w-12 h-12 -mt-8 bg-primary rounded-2xl flex items-center justify-center shadow-xl shadow-primary/30 border-4 border-white active:scale-90 transition-transform">
+                    <Icon className="w-6 h-6 text-white" />
                   </div>
                 ) : (
-                  <Icon className="w-5 h-5" />
+                  <Icon className={`w-5 h-5 ${isActive ? "stroke-[2.5px]" : "stroke-[2px]"}`} />
                 )}
+                
+                {/* The Label Text */}
                 <span
-                  className={`text-[0.6875rem] mt-0.5 ${isList ? "text-primary" : ""}`}
+                  className={`text-[0.65rem] mt-1.5 font-black uppercase tracking-widest ${
+                    isPlusButton ? "text-primary" : isActive ? "text-primary opacity-100" : "text-slate-300 opacity-60"
+                  }`}
                 >
                   {item.label}
                 </span>
+                
+                {/* Small DOT indicator for active non-plus items */}
+                {!isPlusButton && isActive && (
+                  <div className="absolute top-1.5 right-4 w-1.5 h-1.5 bg-primary rounded-full animate-in fade-in zoom-in duration-300" />
+                )}
               </button>
             );
           })}
         </div>
       </nav>
+
+      {/* This component shows temporary alerts (like "Booking Confirmed!") at the top */}
+      <Toaster position="top-center" expand={true} richColors />
     </div>
   );
 }

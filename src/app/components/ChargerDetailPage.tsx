@@ -24,23 +24,36 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { StarRating } from "./StarRating";
 import { BookingModal } from "./BookingModal";
 
+/**
+ * --- CHARGER DETAIL PAGE ---
+ * This page shows everything about a single charging station.
+ * It uses the 'ID' from the URL (e.g. /charger/c1) to find the data.
+ */
 export function ChargerDetailPage() {
-  const { id } = useParams();
+  const { id } = useParams(); // useParams grabs the "c1" or "c2" from the URL
   const navigate = useNavigate();
+  
+  // We pull all chargers and reviews from our global AppContext
   const { chargers, reviews } = useApp();
+  
+  // --- UI STATE ---
   const [showAllReviews, setShowAllReviews] = useState(false);
-  const [showBooking, setShowBooking] = useState(false);
+  const [showBooking, setShowBooking] = useState(false); // Controls the Booking Modal popup
   const [liked, setLiked] = useState(false);
 
+  // --- DATA LOOKUP ---
   const charger = chargers.find((c) => c.id === id);
+
+  // If the ID is wrong or the charger doesn't exist, show an error.
   if (!charger) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8">
-        <AlertCircle className="w-12 h-12 text-muted-foreground mb-3" />
-        <p className="text-muted-foreground">Charger not found</p>
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-white">
+        <AlertCircle className="w-16 h-16 text-slate-200 mb-4" />
+        <h2 className="text-[1.25rem] font-bold text-slate-900">Charger not found</h2>
+        <p className="text-slate-500 mt-2">The link might be broken or the charger was removed.</p>
         <button
           onClick={() => navigate("/")}
-          className="mt-3 px-4 py-2 bg-primary text-white rounded-lg text-[0.875rem]"
+          className="mt-6 px-8 py-3 bg-primary text-white rounded-xl text-[0.875rem] font-bold shadow-lg"
         >
           Back to Home
         </button>
@@ -48,303 +61,179 @@ export function ChargerDetailPage() {
     );
   }
 
+  // Filter reviews to only show the ones for THIS charger
   const chargerReviews = reviews.filter((r) => r.chargerId === charger.id);
   const displayedReviews = showAllReviews
     ? chargerReviews
-    : chargerReviews.slice(0, 3);
+    : chargerReviews.slice(0, 3); // Only show the top 3 reviews initially
 
   return (
-    <div className="pb-24">
-      {/* Header Image */}
-      <div className="relative h-56">
+    // pb-24: adds extra bottom padding so the floating "Book" bar doesn't cover text
+    <div className="pb-24 bg-white min-h-screen">
+      
+      {/* ─── HEADER IMAGE ─── */}
+      <div className="relative h-64 sm:h-80 w-full overflow-hidden">
         <ImageWithFallback
           src={charger.image}
           alt={charger.title}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover shadow-inner"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-transparent" />
+        {/* Dark gradient at the top so the white back button is visible */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-transparent" />
+        
+        {/* Back Button (Floating) */}
         <button
           onClick={() => navigate(-1)}
-          className="absolute top-3 left-3 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm"
+          className="absolute top-4 left-4 w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-5 h-5 text-slate-900" />
         </button>
-        <div className="absolute top-3 right-3 flex gap-2">
-          <button className="w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm">
-            <Share2 className="w-4 h-4" />
+
+        {/* Action Buttons (Share & Favorite) */}
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button className="w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform">
+            <Share2 className="w-5 h-5 text-slate-900" />
           </button>
           <button
             onClick={() => setLiked(!liked)}
-            className="w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm"
+            className="w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
           >
             <Heart
-              className={`w-4 h-4 ${liked ? "text-red-500 fill-red-500" : ""}`}
+              className={`w-5 h-5 ${liked ? "text-red-500 fill-red-500" : "text-slate-900"}`}
             />
           </button>
         </div>
+
+        {/* Availability Badge (Bottom Left of Image) */}
         {charger.available ? (
-          <span className="absolute bottom-3 left-3 px-3 py-1 bg-emerald-500 text-white text-[0.75rem] rounded-full" style={{ fontWeight: 500 }}>
+          <span className="absolute bottom-4 left-4 px-4 py-1.5 bg-emerald-500 text-white text-[0.7rem] uppercase tracking-widest font-black rounded-full shadow-lg">
             Available Now
           </span>
         ) : (
-          <span className="absolute bottom-3 left-3 px-3 py-1 bg-gray-500 text-white text-[0.75rem] rounded-full" style={{ fontWeight: 500 }}>
+          <span className="absolute bottom-4 left-4 px-4 py-1.5 bg-slate-500 text-white text-[0.7rem] uppercase tracking-widest font-black rounded-full shadow-lg">
             Currently Unavailable
           </span>
         )}
       </div>
 
-      {/* Content */}
-      <div className="px-4 pt-4">
-        {/* Title & Rating */}
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-[1.25rem]" style={{ fontWeight: 700 }}>{charger.title}</h1>
-              {charger.verified && (
-                <Shield className="w-5 h-5 text-primary flex-shrink-0" />
-              )}
-            </div>
-            <div className="flex items-center gap-1 text-muted-foreground mt-1">
-              <MapPin className="w-3.5 h-3.5" />
-              <span className="text-[0.8125rem]">
-                {charger.address}, {charger.city}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Rating */}
-        <div className="flex items-center gap-4 mt-3">
-          <StarRating
-            rating={charger.rating}
-            size={16}
-            count={charger.reviewCount}
-          />
-        </div>
-
-        {/* Specs Grid */}
-        <div className="grid grid-cols-2 gap-2 mt-4">
-          <div className="flex items-center gap-2.5 p-3 bg-secondary rounded-xl">
-            <Zap className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-[0.6875rem] text-muted-foreground">Power</p>
-              <p className="text-[0.875rem]" style={{ fontWeight: 600 }}>{charger.power} kW</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5 p-3 bg-secondary rounded-xl">
-            <Info className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-[0.6875rem] text-muted-foreground">Connector</p>
-              <p className="text-[0.875rem]" style={{ fontWeight: 600 }}>{charger.connectorType}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5 p-3 bg-secondary rounded-xl">
-            <DollarSign className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-[0.6875rem] text-muted-foreground">Per Hour</p>
-              <p className="text-[0.875rem]" style={{ fontWeight: 600 }}>
-                ₹{charger.pricePerHour}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5 p-3 bg-secondary rounded-xl">
-            <Clock className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-[0.6875rem] text-muted-foreground">Hours</p>
-              <p className="text-[0.875rem]" style={{ fontWeight: 600 }}>
-                {charger.availableHours.split(",")[0]}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Price Info */}
-        <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
+      {/* ─── CONTENT SECTION ─── */}
+      <div className="px-5 pt-6 space-y-6">
+        
+        {/* Title and Rating Bar */}
+        <div className="flex flex-col gap-2">
+          <h1 className="text-[1.5rem] font-black text-slate-900 leading-tight">
+            {charger.title}
+          </h1>
           <div className="flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-amber-600" />
-            <span className="text-[0.8125rem]" style={{ fontWeight: 600 }}>Pricing Details</span>
-          </div>
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-[0.8125rem] text-muted-foreground">
-              Per Hour
+            <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-lg">
+               <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+               <span className="text-[0.8rem] font-bold text-amber-700">{charger.rating}</span>
+            </div>
+            <span className="text-[0.8rem] text-slate-400 font-medium">
+              ({charger.reviewCount} verified reviews)
             </span>
-            <span className="text-[0.875rem]" style={{ fontWeight: 600 }}>
-              ₹{charger.pricePerHour}
-            </span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-[0.8125rem] text-muted-foreground">
-              Per kWh
-            </span>
-            <span className="text-[0.875rem]" style={{ fontWeight: 600 }}>
-              ₹{charger.pricePerKwh}
-            </span>
-          </div>
-          <div className="flex items-center justify-between mt-1 pt-1 border-t border-amber-200">
-            <span className="text-[0.8125rem] text-muted-foreground">
-              Service Fee
-            </span>
-            <span className="text-[0.875rem]" style={{ fontWeight: 600 }}>₹10</span>
           </div>
         </div>
 
-        {/* Description */}
-        <div className="mt-4">
-          <h3 className="text-[0.9375rem] mb-2" style={{ fontWeight: 600 }}>About this Charger</h3>
-          <p className="text-[0.8125rem] text-muted-foreground leading-relaxed">
+        {/* Location Row */}
+        <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <div className="w-11 h-11 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+             <MapPin className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1">
+            <p className="text-[0.875rem] font-bold text-slate-900">{charger.address}</p>
+            <p className="text-[0.75rem] text-slate-500 font-medium">{charger.city}</p>
+          </div>
+          <button className="text-[0.8rem] text-primary font-bold hover:underline">
+            View on Map
+          </button>
+        </div>
+
+        {/* Technical Specs (Fast Charge, Plug Type, etc.) */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+               <Zap className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-[0.65rem] text-slate-400 uppercase font-black tracking-widest">Power</p>
+              <p className="text-[0.9rem] font-bold text-slate-900">{charger.power} kW</p>
+            </div>
+          </div>
+          <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+             <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+               <Info className="w-5 h-5 text-blue-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[0.65rem] text-slate-400 uppercase font-black tracking-widest">Plug Type</p>
+              <p className="text-[0.9rem] font-bold text-slate-900 truncate">{charger.connectorType}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Detailed Description */}
+        <div>
+          <h2 className="text-[1.125rem] font-black text-slate-900 mb-2">About this Station</h2>
+          <p className="text-[0.9rem] text-slate-600 leading-relaxed font-medium">
             {charger.description}
           </p>
         </div>
 
-        {/* Amenities */}
-        <div className="mt-4">
-          <h3 className="text-[0.9375rem] mb-2" style={{ fontWeight: 600 }}>Amenities</h3>
-          <div className="flex flex-wrap gap-2">
-            {charger.amenities.map((a) => (
-              <span
-                key={a}
-                className="flex items-center gap-1 px-2.5 py-1 bg-muted rounded-lg text-[0.75rem] text-muted-foreground"
-              >
-                <CheckCircle2 className="w-3 h-3 text-primary" />
-                {a}
-              </span>
+        {/* REVIEWS SECTION */}
+        <div className="pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[1.125rem] font-black text-slate-900">User Experience</h2>
+            <button
+               onClick={() => setShowAllReviews(!showAllReviews)}
+               className="text-[0.8rem] text-primary font-bold"
+            >
+               {showAllReviews ? "Show Less" : `See All (${chargerReviews.length})`}
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {displayedReviews.map((review) => (
+              <div key={review.id} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
+                <div className="flex items-center gap-3 mb-3">
+                  <img src={review.userAvatar} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" />
+                  <div className="flex-1">
+                    <p className="text-[0.85rem] font-bold text-slate-900">{review.userName}</p>
+                    <div className="flex gap-0.5 mt-0.5">
+                      <StarRating rating={review.rating} size={10} />
+                    </div>
+                  </div>
+                  <span className="text-[0.7rem] text-slate-400 font-medium">{review.date}</span>
+                </div>
+                <p className="text-[0.85rem] text-slate-600 font-medium italic">"{review.comment}"</p>
+              </div>
             ))}
           </div>
         </div>
-
-        {/* Instructions */}
-        <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-100">
-          <div className="flex items-center gap-2 mb-1">
-            <Info className="w-4 h-4 text-blue-600" />
-            <span className="text-[0.8125rem]" style={{ fontWeight: 600 }}>Charging Instructions</span>
-          </div>
-          <p className="text-[0.8125rem] text-muted-foreground leading-relaxed">
-            {charger.instructions}
-          </p>
-        </div>
-
-        {/* Host Info */}
-        <div className="mt-4 p-3 bg-card rounded-xl border border-border">
-          <div className="flex items-center gap-3">
-            <img
-              src={charger.ownerAvatar}
-              alt={charger.ownerName}
-              className="w-12 h-12 rounded-full"
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[0.9375rem]" style={{ fontWeight: 600 }}>
-                  {charger.ownerName}
-                </span>
-                <Shield className="w-3.5 h-3.5 text-primary" />
-              </div>
-              <div className="flex items-center gap-1">
-                <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
-                <span className="text-[0.75rem] text-muted-foreground">
-                  {charger.ownerRating} host rating
-                </span>
-              </div>
-            </div>
-            <button className="px-3 py-1.5 border border-border rounded-lg text-[0.8125rem] flex items-center gap-1 text-muted-foreground">
-              <MessageCircle className="w-3.5 h-3.5" />
-              Chat
-            </button>
-          </div>
-        </div>
-
-        {/* Reviews */}
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[0.9375rem]" style={{ fontWeight: 600 }}>
-              Reviews ({chargerReviews.length})
-            </h3>
-          </div>
-          {displayedReviews.length === 0 ? (
-            <p className="text-[0.8125rem] text-muted-foreground text-center py-6">
-              No reviews yet. Be the first to review!
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {displayedReviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="p-3 bg-card rounded-xl border border-border"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <img
-                      src={review.userAvatar}
-                      alt={review.userName}
-                      className="w-8 h-8 rounded-full"
-                    />
-                    <div className="flex-1">
-                      <p className="text-[0.8125rem]" style={{ fontWeight: 600 }}>
-                        {review.userName}
-                      </p>
-                      <p className="text-[0.6875rem] text-muted-foreground">
-                        {review.date}
-                      </p>
-                    </div>
-                    <StarRating
-                      rating={review.rating}
-                      size={12}
-                      showValue={false}
-                    />
-                  </div>
-                  <p className="text-[0.8125rem] text-muted-foreground mt-2 leading-relaxed">
-                    {review.comment}
-                  </p>
-                  <button className="flex items-center gap-1 mt-2 text-[0.75rem] text-muted-foreground hover:text-foreground transition-colors">
-                    <ThumbsUp className="w-3 h-3" />
-                    Helpful ({review.helpful})
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {chargerReviews.length > 3 && (
-            <button
-              onClick={() => setShowAllReviews(!showAllReviews)}
-              className="flex items-center gap-1 mx-auto mt-3 text-[0.8125rem] text-primary"
-            >
-              {showAllReviews ? (
-                <>
-                  Show Less <ChevronUp className="w-4 h-4" />
-                </>
-              ) : (
-                <>
-                  Show All Reviews <ChevronDown className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          )}
-        </div>
       </div>
 
-      {/* Bottom Booking Bar */}
-      <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 w-full max-w-lg z-40 bg-white border border-border px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] rounded-t-3xl md:rounded-3xl md:mb-2">
-        <div className="flex items-center justify-between mx-auto">
-          <div>
-            <span className="text-[1.25rem] text-primary" style={{ fontWeight: 700 }}>
-              ₹{charger.pricePerHour}
-            </span>
-            <span className="text-[0.8125rem] text-muted-foreground"> / hour</span>
+      {/* ─── FLOATING BOOKING BAR ─── */}
+      {/* fixed bottom-0: sticks to the bottom of the screen regardless of scroll position */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-100 backdrop-blur-lg bg-white/90 z-[30]">
+        <div className="max-w-md mx-auto flex items-center justify-between gap-4">
+          <div className="flex flex-col">
+            <p className="text-[0.7rem] text-slate-400 font-black uppercase tracking-widest">Total Price</p>
+            <div className="flex items-baseline gap-1">
+              <span className="text-[1.25rem] font-black text-slate-900">₹{charger.pricePerHour}</span>
+              <span className="text-[0.8rem] text-slate-400 font-bold">/ hour</span>
+            </div>
           </div>
+          
           <button
             onClick={() => setShowBooking(true)}
-            disabled={!charger.available}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[0.9375rem] transition-colors ${
-              charger.available
-                ? "bg-primary text-white hover:bg-primary/90"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-            }`}
+            className="flex-1 max-w-[200px] h-14 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
-            <Calendar className="w-4 h-4" />
-            {charger.available ? "Book Now" : "Unavailable"}
+            <Calendar className="w-5 h-5 fill-white/20" />
+            Reserve Now
           </button>
         </div>
       </div>
 
-      {/* Booking Modal */}
+      {/* The actual Booking Wizard (opens when button is clicked) */}
       {showBooking && (
         <BookingModal
           charger={charger}
