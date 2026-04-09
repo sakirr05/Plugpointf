@@ -6,7 +6,7 @@ import { Toaster } from "sonner";
 export default function App() {
   return (
     <AppProvider>
-      <div className="h-screen w-full max-w-lg mx-auto bg-background shadow-xl overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <div className="relative translate-x-0 h-screen w-full max-w-lg mx-auto bg-background shadow-xl overflow-hidden" style={{ fontFamily: "'Inter', sans-serif" }}>
         <RouterProvider router={router} />
       </div>
       <Toaster position="top-center" />
