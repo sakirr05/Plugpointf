@@ -214,8 +214,8 @@ export function ChargerDetailPage() {
       </div>
 
       {/* ─── FLOATING BOOKING BAR ─── */}
-      {/* fixed bottom-0: sticks to the bottom of the screen regardless of scroll position */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-slate-100 backdrop-blur-lg bg-white/90 z-[30]">
+      {/* fixed bottom-0: attaches directly to the App.tsx bounds because it uses transform translate-x-0 */}
+      <div className="fixed bottom-0 left-0 w-full p-4 bg-white border-t border-slate-100 backdrop-blur-lg bg-white/90 z-[30]">
         <div className="max-w-md mx-auto flex items-center justify-between gap-4">
           <div className="flex flex-col">
             <p className="text-[0.7rem] text-slate-400 font-black uppercase tracking-widest">Total Price</p>

@@ -661,19 +661,20 @@ export function MapPage() {
               </div>
 
               {/* Text Info Container */}
-              <div className="flex-1 flex flex-col justify-between py-1">
-                <div>
+              <div className="flex-1 flex flex-col justify-between py-1 min-w-0">
+                <div className="pr-8">
                   <div className="flex items-center gap-2">
                     {/* leading-tight: keeps line spacing small for titles */}
                     {/* truncate: adds '...' if the name is too long for the card */}
                     <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">{selectedCharger.title}</h3>
-                    {selectedCharger.verified && <Shield className="w-4 h-4 text-emerald-500 fill-emerald-50" />}
+                    {selectedCharger.verified && <Shield className="w-4 h-4 text-emerald-500 fill-emerald-50 flex-shrink-0" />}
                   </div>
                   
                   <p className="text-sm text-slate-500 truncate mt-0.5">{selectedCharger.address}</p>
+
                   
                   {/* Badges Row (Rating, Connector, Power) */}
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
                     {/* bg-amber-50: very light yellow background for the star rating */}
                     <div className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1">
                       <Star className="w-3 h-3 fill-amber-500 stroke-amber-500" /> {selectedCharger.rating}
