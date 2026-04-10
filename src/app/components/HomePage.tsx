@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router";
 import {
   Search,
@@ -12,6 +12,12 @@ import {
   Bolt,
   IndianRupee,
   Star,
+  Navigation,
+  Sparkles,
+  TrendingUp,
+  ChevronDown,
+  Gift,
+  User,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { ChargerCard } from "./ChargerCard";
@@ -29,7 +35,7 @@ const sortOptions = ["Nearest", "Price: Low", "Price: High", "Top Rated"];
  */
 export function HomePage() {
   // We grab the list of chargers from our global AppContext
-  const { chargers } = useApp();
+  const { chargers, isAuthenticated, user } = useApp();
   const navigate = useNavigate();
 
   // --- UI STATE ---
@@ -43,6 +49,7 @@ export function HomePage() {
   const [minRating, setMinRating] = useState("All");
   const [priceRange, setPriceRange] = useState("All");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const activeFilterCount = [
     selectedConnector !== "All",
@@ -107,79 +114,138 @@ export function HomePage() {
     });
 
   const availableCount = chargers.filter((c) => c.available).length;
+  const topRated = [...chargers].sort((a, b) => b.rating - a.rating).slice(0, 5);
+  const nearbyChargers = filtered.slice(0, 10);
 
   return (
-    // pb-4: adds 'Padding-Bottom' so content doesn't touch the very bottom of the screen
-    <div className="pb-4">
+    <div className="pb-4 bg-background">
       
-      {/* ─── HERO SECTION ─── */}
-      {/* This is the big image at the top with the welcome text */}
-      <div className="relative h-52 overflow-hidden">
-        <ImageWithFallback
-          src="https://images.unsplash.com/photo-1765272088009-100c96a4cd4e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxlbGVjdHJpYyUyMHZlaGljbGUlMjBjaGFyZ2luZyUyMHN0YXRpb24lMjBtb2Rlcm58ZW58MXx8fHwxNzcxMzcwNTA2fDA&ixlib=rb-4.1.0&q=80&w=1080"
-          alt="EV Charging"
-          className="w-full h-full object-cover" // object-cover: makes the image fill the box without stretching
-        />
-        {/* The dark overlay makes the white text easier to read on top of the image */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+      {/* ═══════════════════════════════════════════
+          DARK HERO HEADER (Matches MapPage style)
+          ═══════════════════════════════════════════ */}
+      <div className="header-gradient relative overflow-hidden">
+        {/* Subtle radial glow effect */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/5 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl" />
         
-        <div className="absolute inset-0 flex flex-col justify-end p-4">
-          <h1 className="text-white text-[1.5rem]" style={{ fontWeight: 700, lineHeight: 1.2 }}>
-            Find & share EV
-            <br />
-            chargers nearby
-          </h1>
-          <p className="text-white/80 text-[0.8125rem] mt-1">
-            {availableCount} chargers available in Bangalore
-          </p>
-        </div>
-      </div>
+        <div className="relative z-10">
+          {/* Top Row: Logo + Profile */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/10">
+                <Zap className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h1 className="text-white text-[1.1rem] tracking-tight" style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>
+                  PlugPoint
+                </h1>
+                <p className="text-white/40 text-[0.6rem] font-semibold uppercase tracking-widest">Peer-to-Peer Charging</p>
+              </div>
+            </div>
 
-      {/* ─── SEARCH BAR ─── */}
-      {/* -mt-5: pull the search bar UP so it overlaps the bottom of the hero image */}
-      <div className="px-4 -mt-5 relative z-10">
-        <div className="flex items-center gap-2">
-          {/* flex-1: makes the search input take up all available horizontal space */}
-          <div className="flex-1 flex items-center bg-white rounded-xl border border-border shadow-lg px-3 py-2.5">
-            <Search className="w-4 h-4 text-muted-foreground mr-2" />
-            <input
-              type="text"
-              placeholder="Search by location or charger name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              // bg-transparent: removes the input's own background so it matches the white box
-              className="flex-1 bg-transparent outline-none text-[0.875rem] placeholder:text-muted-foreground"
-            />
-            {searchQuery && (
-              <button onClick={() => setSearchQuery("")}>
-                <X className="w-4 h-4 text-muted-foreground" />
+            {/* Profile Avatar */}
+            {isAuthenticated ? (
+              <button onClick={() => navigate("/profile")} className="w-9 h-9 rounded-full overflow-hidden border-2 border-emerald-400/30 active:scale-95 transition-transform">
+                {user?.avatar && !avatarError ? (
+                  <img src={user.avatar} alt="" className="w-full h-full object-cover" onError={() => setAvatarError(true)} />
+                ) : (
+                  <div className="w-full h-full bg-white/10 flex items-center justify-center">
+                    <User className="w-5 h-5 text-white/60" />
+                  </div>
+                )}
+              </button>
+            ) : (
+              <button onClick={() => navigate("/auth")} className="px-3.5 py-1.5 bg-white/10 border border-white/10 text-white rounded-lg text-[0.7rem] font-bold backdrop-blur-sm hover:bg-white/15 transition-colors">
+                Sign In
               </button>
             )}
           </div>
-          
-          {/* Filter Toggle Button */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`relative p-2.5 rounded-xl border shadow-lg transition-colors ${
-              showFilters
-                ? "bg-primary text-white border-primary" // Highlight if filters are open
-                : "bg-white text-muted-foreground border-border"
-            }`}
-          >
-            <SlidersHorizontal className="w-5 h-5" />
-            {activeFilterCount > 0 && !showFilters && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[0.5rem] font-bold rounded-full flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+
+          {/* Greeting & Stats */}
+          <div className="px-5 pt-2 pb-4">
+            <h2 className="text-white text-[1.35rem]" style={{ fontWeight: 700, lineHeight: 1.25, fontSize: '1.35rem' }}>
+              Find your next
+              <br />
+              <span className="gradient-text">charging stop</span>
+            </h2>
+            <p className="text-white/50 text-[0.8rem] mt-1.5 font-medium">
+              {availableCount} chargers available nearby
+            </p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="px-5 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search stations, locations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white text-sm text-slate-800 placeholder-slate-400 outline-none shadow-sm"
+                  style={{ fontSize: '13px' }}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <X className="w-4 h-4 text-slate-400" />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`relative w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-colors ${
+                  showFilters ? "bg-primary text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                <SlidersHorizontal className="w-4.5 h-4.5" />
+                {activeFilterCount > 0 && !showFilters && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[0.5rem] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Action Pills */}
+          <div className="px-5 pb-4 flex gap-2 overflow-x-auto no-scrollbar">
+            <button 
+              onClick={() => navigate("/map")}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-[0.75rem] font-semibold whitespace-nowrap backdrop-blur-sm hover:bg-white/15 transition-all active:scale-95"
+            >
+              <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+              Nearby
+            </button>
+            <button 
+              onClick={() => { setOnlyAvailable(true); setPowerLevel("DC Fast"); }}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-[0.75rem] font-semibold whitespace-nowrap backdrop-blur-sm hover:bg-white/15 transition-all active:scale-95"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              Fast Charge
+            </button>
+            <button 
+              onClick={() => navigate("/map?tab=trip")}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-[0.75rem] font-semibold whitespace-nowrap backdrop-blur-sm hover:bg-white/15 transition-all active:scale-95"
+            >
+              <Navigation className="w-3.5 h-3.5 text-blue-400" />
+              Plan Trip
+            </button>
+            <button 
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-[0.75rem] font-semibold whitespace-nowrap backdrop-blur-sm hover:bg-white/15 transition-all active:scale-95"
+            >
+              <Gift className="w-3.5 h-3.5 text-pink-400" />
+              Offers
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ─── FILTERS PANEL ─── */}
-      {/* Only renders if 'showFilters' is true */}
+      {/* ═══════════════════════════════════════════
+          FILTERS PANEL (Slides down under search)
+          ═══════════════════════════════════════════ */}
       {showFilters && (
-        <div className="mx-4 mt-3 p-4 bg-white rounded-xl border border-border shadow-sm">
+        <div className="mx-4 mt-3 p-4 bg-white rounded-2xl border border-slate-100 shadow-lg">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <h3 className="text-[0.9375rem]" style={{ fontWeight: 600 }}>Filters</h3>
@@ -199,121 +265,86 @@ export function HomePage() {
                 setPriceRange("All");
                 setVerifiedOnly(false);
               }}
-              className="text-[0.8125rem] text-primary"
+              className="text-[0.8125rem] text-primary font-semibold"
             >
               Reset all
             </button>
           </div>
 
-          {/* Sort Options List */}
+          {/* Sort */}
           <div className="mb-3">
-            <label className="text-[0.75rem] text-muted-foreground mb-1.5 block" style={{ fontWeight: 500 }}>
-              Sort By
-            </label>
+            <label className="text-[0.7rem] text-slate-400 mb-1.5 block font-bold uppercase tracking-wider">Sort By</label>
             <div className="flex flex-wrap gap-1.5">
               {sortOptions.map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => setSortBy(opt)}
-                  // bg-primary vs bg-muted: changes color based on selection
-                  className={`px-3 py-1.5 rounded-lg text-[0.75rem] transition-colors ${
-                    sortBy === opt
-                      ? "bg-primary text-white"
-                      : "bg-muted text-muted-foreground"
+                <button key={opt} onClick={() => setSortBy(opt)}
+                  className={`px-3 py-1.5 rounded-lg text-[0.75rem] transition-colors font-medium ${
+                    sortBy === opt ? "bg-primary text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
                   }`}
-                >
-                  {opt}
-                </button>
+                >{opt}</button>
               ))}
             </div>
           </div>
 
+          {/* Connector */}
           <div className="mb-3">
-            <label className="text-[0.75rem] text-muted-foreground mb-1.5 block" style={{ fontWeight: 500 }}>
-              Connector Type
-            </label>
+            <label className="text-[0.7rem] text-slate-400 mb-1.5 block font-bold uppercase tracking-wider">Connector</label>
             <div className="flex flex-wrap gap-1.5">
               {connectorTypes.map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setSelectedConnector(type)}
-                  className={`px-3 py-1.5 rounded-lg text-[0.75rem] transition-colors ${
-                    selectedConnector === type
-                      ? "bg-primary text-white"
-                      : "bg-muted text-muted-foreground"
+                <button key={type} onClick={() => setSelectedConnector(type)}
+                  className={`px-3 py-1.5 rounded-lg text-[0.75rem] transition-colors font-medium ${
+                    selectedConnector === type ? "bg-primary text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
                   }`}
-                >
-                  {type}
-                </button>
+                >{type}</button>
               ))}
             </div>
           </div>
 
-          <div className="px-4 pt-3 pb-3 border-b border-border -mx-4">
-            <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
-              Power Output
-            </p>
-            <div className="flex gap-2 flex-wrap">
+          {/* Power Output */}
+          <div className="mb-3 pt-3 border-t border-slate-100">
+            <label className="text-[0.7rem] text-slate-400 mb-1.5 block font-bold uppercase tracking-wider">Power Output</label>
+            <div className="flex gap-1.5 flex-wrap">
               {[
                 { label: "All", sub: "Any" },
                 { label: "Level 1", sub: "≤2 kW" },
                 { label: "Level 2", sub: "3–22 kW" },
                 { label: "DC Fast", sub: "22kW+" },
               ].map(({ label, sub }) => (
-                <button
-                  key={label}
-                  onClick={() => setPowerLevel(label)}
-                  className={`flex flex-col items-start px-3 py-2 rounded-xl border text-left transition-all duration-150 min-w-[4rem] ${
+                <button key={label} onClick={() => setPowerLevel(label)}
+                  className={`flex flex-col items-start px-3 py-2 rounded-xl border text-left transition-all min-w-[4rem] ${
                     powerLevel === label
                       ? "bg-primary text-white border-primary shadow-sm"
-                      : "bg-muted/50 text-foreground border-border"
+                      : "bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100"
                   }`}
                 >
-                  <span className="text-[0.8125rem] font-medium leading-tight">{label}</span>
-                  <span
-                    className={`text-[0.625rem] mt-0.5 ${
-                      powerLevel === label ? "text-white/80" : "text-muted-foreground"
-                    }`}
-                  >
-                    {sub}
-                  </span>
+                  <span className="text-[0.8rem] font-semibold leading-tight">{label}</span>
+                  <span className={`text-[0.6rem] mt-0.5 ${powerLevel === label ? "text-white/70" : "text-slate-400"}`}>{sub}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="px-4 pt-3 pb-3 border-b border-border -mx-4">
-            <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
-              Minimum Rating
-            </p>
-            <div className="flex gap-2">
+          {/* Rating */}
+          <div className="mb-3 pt-3 border-t border-slate-100">
+            <label className="text-[0.7rem] text-slate-400 mb-1.5 block font-bold uppercase tracking-wider">Minimum Rating</label>
+            <div className="flex gap-1.5">
               {["All", "3+", "4+", "4.5+"].map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setMinRating(r)}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-xl border text-[0.8125rem] font-medium transition-all duration-150 ${
+                <button key={r} onClick={() => setMinRating(r)}
+                  className={`flex items-center gap-1 px-3 py-2 rounded-xl border text-[0.8rem] font-medium transition-all ${
                     minRating === r
                       ? "bg-primary text-white border-primary shadow-sm"
-                      : "bg-muted/50 text-foreground border-border"
+                      : "bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100"
                   }`}
                 >
-                  {r !== "All" && (
-                    <Star
-                      className={`w-3 h-3 ${
-                        minRating === r ? "text-white fill-white" : "text-amber-400 fill-amber-400"
-                      }`}
-                    />
-                  )}
+                  {r !== "All" && <Star className={`w-3 h-3 ${minRating === r ? "text-white fill-white" : "text-amber-400 fill-amber-400"}`} />}
                   {r}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="px-4 pt-3 pb-3 border-b border-border -mx-4">
-            <p className="text-[0.6875rem] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
-              Price Range
-            </p>
+          {/* Price Range */}
+          <div className="mb-3 pt-3 border-t border-slate-100">
+            <label className="text-[0.7rem] text-slate-400 mb-1.5 block font-bold uppercase tracking-wider">Price Range</label>
             <div className="grid grid-cols-2 gap-1.5">
               {[
                 { label: "All", sub: "Any price" },
@@ -321,138 +352,193 @@ export function HomePage() {
                 { label: "Mid", sub: "₹80–120/hr" },
                 { label: "Premium", sub: "₹120+/hr" },
               ].map(({ label, sub }) => (
-                <button
-                  key={label}
-                  onClick={() => setPriceRange(label)}
-                  className={`flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all duration-150 ${
+                <button key={label} onClick={() => setPriceRange(label)}
+                  className={`flex flex-col items-start px-3 py-2.5 rounded-xl border text-left transition-all ${
                     priceRange === label
                       ? "bg-primary text-white border-primary shadow-sm"
-                      : "bg-muted/50 text-foreground border-border"
+                      : "bg-slate-50 text-slate-700 border-slate-100 hover:bg-slate-100"
                   }`}
                 >
-                  <span className="text-[0.8125rem] font-medium">{label}</span>
-                  <span
-                    className={`text-[0.625rem] mt-0.5 ${
-                      priceRange === label ? "text-white/80" : "text-muted-foreground"
-                    }`}
-                  >
-                    {sub}
-                  </span>
+                  <span className="text-[0.8rem] font-semibold">{label}</span>
+                  <span className={`text-[0.6rem] mt-0.5 ${priceRange === label ? "text-white/70" : "text-slate-400"}`}>{sub}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="mt-3">
+          {/* Toggles */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[0.875rem] font-medium text-foreground">Available now only</p>
-                <p className="text-[0.75rem] text-muted-foreground mt-0.5">Hide chargers that are currently busy</p>
+                <p className="text-[0.8rem] font-semibold text-slate-700">Available now only</p>
+                <p className="text-[0.7rem] text-slate-400 mt-0.5">Hide busy chargers</p>
               </div>
-              <button
-                onClick={() => setOnlyAvailable(!onlyAvailable)}
+              <button onClick={() => setOnlyAvailable(!onlyAvailable)}
                 className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
-                  onlyAvailable ? "bg-primary" : "bg-switch-background"
+                  onlyAvailable ? "bg-primary" : "bg-slate-200"
                 }`}
               >
-                <div
-                  className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-                    onlyAvailable ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                  onlyAvailable ? "translate-x-6" : "translate-x-1"
+                }`} />
               </button>
             </div>
-            <div className="border-t border-border mt-3 pt-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[0.875rem] font-medium text-foreground">Verified hosts only</p>
-                  <p className="text-[0.75rem] text-muted-foreground mt-0.5">
-                    Show chargers from identity-verified hosts
-                  </p>
-                </div>
-                <button
-                  onClick={() => setVerifiedOnly(!verifiedOnly)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
-                    verifiedOnly ? "bg-primary" : "bg-switch-background"
-                  }`}
-                >
-                  <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-                      verifiedOnly ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[0.8rem] font-semibold text-slate-700">Verified hosts only</p>
+                <p className="text-[0.7rem] text-slate-400 mt-0.5">Identity-verified hosts</p>
               </div>
+              <button onClick={() => setVerifiedOnly(!verifiedOnly)}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                  verifiedOnly ? "bg-primary" : "bg-slate-200"
+                }`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${
+                  verifiedOnly ? "translate-x-6" : "translate-x-1"
+                }`} />
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── QUICK STATS ─── */}
-      {/* A horizontal scrolling row of stats about the network */}
+      {/* ═══════════════════════════════════════════
+          INLINE STATS ROW
+          ═══════════════════════════════════════════ */}
       <div className="flex gap-3 px-4 mt-4 overflow-x-auto no-scrollbar">
         {[
-          { icon: Bolt, label: "Chargers", value: chargers.length.toString(), color: "bg-emerald-50 text-emerald-600" },
-          { icon: MapPin, label: "Locations", value: "Bangalore", color: "bg-blue-50 text-blue-600" },
-          { icon: IndianRupee, label: "From", value: "₹80/hr", color: "bg-amber-50 text-amber-600" },
-          { icon: Star, label: "Avg Rating", value: "4.7", color: "bg-purple-50 text-purple-600" },
+          { icon: Bolt, label: "Chargers", value: chargers.length.toString(), iconBg: "bg-emerald-500/10", iconColor: "text-emerald-600" },
+          { icon: MapPin, label: "City", value: "Bangalore", iconBg: "bg-blue-500/10", iconColor: "text-blue-600" },
+          { icon: IndianRupee, label: "From", value: "₹80/hr", iconBg: "bg-amber-500/10", iconColor: "text-amber-600" },
+          { icon: Star, label: "Avg", value: "4.7★", iconBg: "bg-purple-500/10", iconColor: "text-purple-600" },
         ].map((stat) => (
-          <div
-            key={stat.label}
-            // flex-shrink-0: keeps these boxes from getting squashed when they scroll horizontally
-            className="flex items-center gap-2.5 px-3 py-2.5 bg-white rounded-xl border border-border flex-shrink-0"
+          <div key={stat.label}
+            className="flex items-center gap-2.5 px-3 py-2.5 bg-white rounded-xl border border-slate-100/80 flex-shrink-0 shadow-sm"
           >
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${stat.color}`}>
-              <stat.icon className="w-4 h-4" />
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${stat.iconBg}`}>
+              <stat.icon className={`w-4 h-4 ${stat.iconColor}`} />
             </div>
             <div>
-              <p className="text-[0.6875rem] text-muted-foreground">{stat.label}</p>
-              <p className="text-[0.8125rem]" style={{ fontWeight: 600 }}>{stat.value}</p>
+              <p className="text-[0.65rem] text-slate-400 font-medium">{stat.label}</p>
+              <p className="text-[0.8rem] font-bold text-slate-800">{stat.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ─── MAP CTA ─── */}
-      {/* Big gradient button to go to the Map screen */}
+      {/* ═══════════════════════════════════════════
+          TOP RATED — HORIZONTAL CAROUSEL
+          ═══════════════════════════════════════════ */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between px-4 mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-amber-500/10 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-3.5 h-3.5 text-amber-600" />
+            </div>
+            <h2 className="text-[1rem] font-bold text-slate-900">Top Rated</h2>
+          </div>
+          <button className="text-[0.75rem] text-primary font-semibold flex items-center gap-0.5">
+            See all <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="flex gap-3 overflow-x-auto no-scrollbar pl-4 pr-4">
+          {topRated.map((charger) => (
+            <button
+              key={charger.id}
+              onClick={() => navigate(`/charger/${charger.id}`)}
+              className="flex-shrink-0 w-56 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden card-lift text-left"
+            >
+              {/* Image */}
+              <div className="relative h-32 overflow-hidden">
+                <ImageWithFallback src={charger.image} alt={charger.title} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                
+                {/* Rating Badge */}
+                <div className="absolute top-2.5 right-2.5 flex items-center gap-1 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-lg">
+                  <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                  <span className="text-[0.7rem] font-bold text-slate-800">{charger.rating}</span>
+                </div>
+
+                {/* Availability */}
+                {charger.available && (
+                  <div className="absolute top-2.5 left-2.5 px-2 py-0.5 bg-emerald-500 rounded-lg">
+                    <span className="text-[0.6rem] font-bold text-white uppercase tracking-wider">Open</span>
+                  </div>
+                )}
+
+                {/* Price */}
+                <div className="absolute bottom-2.5 right-2.5">
+                  <span className="text-white text-[0.9rem] font-black">₹{charger.pricePerHour}</span>
+                  <span className="text-white/70 text-[0.65rem] font-medium">/hr</span>
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="p-3">
+                <h3 className="text-[0.8rem] font-bold text-slate-900 leading-tight line-clamp-1">{charger.title}</h3>
+                <div className="flex items-center gap-1 text-slate-400 mt-1">
+                  <MapPin className="w-3 h-3 flex-shrink-0" />
+                  <span className="text-[0.65rem] truncate font-medium">{charger.address}</span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="px-1.5 py-0.5 bg-slate-50 rounded text-[0.6rem] font-bold text-slate-500">{charger.power}kW</span>
+                  <span className="px-1.5 py-0.5 bg-blue-50 rounded text-[0.6rem] font-bold text-blue-600">{charger.connectorType.replace("Wall Connector", "")}</span>
+                  {charger.verified && <Shield className="w-3 h-3 text-emerald-500" />}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════
+          EXPLORE ON MAP — Compact CTA
+          ═══════════════════════════════════════════ */}
       <button
         onClick={() => navigate("/map")}
-        // bg-gradient-to-r: creates a smooth color fade from left to right
-        className="mx-4 mt-4 w-[calc(100%-2rem)] flex items-center justify-between p-3 bg-gradient-to-r from-primary to-emerald-600 rounded-xl text-white shadow-lg"
+        className="mx-4 mt-5 w-[calc(100%-2rem)] flex items-center justify-between p-3.5 bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl text-white shadow-lg group active:scale-[0.98] transition-transform"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-            <MapPin className="w-5 h-5" />
+          <div className="w-10 h-10 bg-primary/20 rounded-xl flex items-center justify-center group-hover:bg-primary/30 transition-colors">
+            <MapPin className="w-5 h-5 text-emerald-400" />
           </div>
           <div className="text-left">
-            <p className="text-[0.875rem]" style={{ fontWeight: 600 }}>Explore on Map</p>
-            <p className="text-[0.75rem] text-white/80">Find chargers near you</p>
+            <p className="text-[0.85rem] font-bold">Explore on Map</p>
+            <p className="text-[0.7rem] text-white/50 font-medium">View all {chargers.length} chargers nearby</p>
           </div>
         </div>
-        <ChevronRight className="w-5 h-5" />
+        <ChevronRight className="w-5 h-5 text-white/30 group-hover:text-white/60 transition-colors" />
       </button>
 
-      {/* ─── CHARGER LISTINGS ─── */}
+      {/* ═══════════════════════════════════════════
+          ALL CHARGERS LIST
+          ═══════════════════════════════════════════ */}
       <div className="px-4 mt-6">
-        <h2 className="text-[1.125rem] mb-3 font-bold">
-          Nearby Chargers
-          <span className="text-muted-foreground text-[0.8125rem] ml-2 font-normal">
-            ({filtered.length})
-          </span>
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-primary/10 rounded-lg flex items-center justify-center">
+              <Zap className="w-3.5 h-3.5 text-primary" />
+            </div>
+            <h2 className="text-[1rem] font-bold text-slate-900">
+              All Chargers
+              <span className="text-slate-400 text-[0.8rem] ml-1.5 font-normal">({filtered.length})</span>
+            </h2>
+          </div>
+        </div>
 
-        {/* Empty State: if no chargers match the user's search */}
+        {/* Empty State */}
         {filtered.length === 0 ? (
-          <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-            <Search className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 text-[0.875rem] font-medium">No chargers found</p>
+          <div className="text-center py-16 bg-white rounded-2xl border border-slate-100 shadow-sm">
+            <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
+              <Search className="w-7 h-7 text-slate-300" />
+            </div>
+            <p className="text-slate-600 text-[0.875rem] font-semibold">No chargers found</p>
             <p className="text-slate-400 text-[0.75rem] mt-1">Try adjusting your filters</p>
           </div>
         ) : (
-          // Grid of actual results
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4">
             {filtered.map((charger) => (
-              // The 'ChargerCard' is a separate small component that draws the actual card
               <ChargerCard key={charger.id} charger={charger} />
             ))}
           </div>

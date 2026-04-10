@@ -34,6 +34,16 @@
   --radius: 0.75rem;
   --ring: #0d9668;
   --border: #e2e8f0;
+
+  /* Dark Header System — shared across Map, Home, Bookings, Profile */
+  --header-gradient-start: #0f1b2d;
+  --header-gradient-mid: #1a2d47;
+  --header-gradient-end: #152238;
+
+  /* Premium accent colors */
+  --accent-amber: #f59e0b;
+  --accent-blue: #3b82f6;
+  --accent-rose: #f43f5e;
 }
 
 /**
