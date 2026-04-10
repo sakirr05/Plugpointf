@@ -40,13 +40,16 @@ export function Layout() {
   // We want to HIDE the global bottom navigation on those pages to avoid overlaps.
   const isChargerDetail = location.pathname.startsWith("/charger/");
   const isAuthPage = location.pathname === "/auth";
+  const isMapPage = location.pathname === "/map";
   const hideNavBar = isChargerDetail || isAuthPage;
+  const hideHeader = isMapPage; // Map page has its own custom dark header
 
   return (
     // h-screen: makes the app exactly the height of the phone screen
     <div className="flex flex-col h-screen bg-slate-50 selection:bg-primary/30">
       
       {/* ─── APP HEADER ─── */}
+      {!hideHeader && (
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-transform" onClick={() => navigate("/")}>
           {/* Main Logo Icon */}
@@ -86,11 +89,12 @@ export function Layout() {
           </button>
         )}
       </header>
+      )}
 
       {/* ─── MAIN CONTENT AREA ─── */}
       {/* flex-1: takes up all the space between the header and nav bar */}
       {/* overflow-y-auto: allows the content to scroll while the header/nav stay fixed */}
-      <main className="flex-1 overflow-y-auto no-scrollbar">
+      <main className={`flex-1 ${isMapPage ? 'overflow-hidden' : 'overflow-y-auto'} no-scrollbar`}>
         {/* <Outlet /> is a placeholder. React Router replaces this with 
             whatever page (Home, Map, etc.) matches the current URL. */}
         <Outlet />
