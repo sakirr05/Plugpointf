@@ -10,7 +10,16 @@ import {
   Navigation,
   LocateFixed,
   Loader2,
-  Maximize2,
+  Search,
+  SlidersHorizontal,
+  ChevronDown,
+  Gift,
+  List,
+  MapPin,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  BatteryCharging,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
@@ -73,33 +82,28 @@ function minDistanceFromChargerToRoute(charger: Charger, routeCoords: [number, n
 }
 
 export function MapPage() {
-  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute } = useApp();
+  const { chargers, fetchPublicChargers, fetchPublicChargersForRoute, user } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const tabParam = queryParams.get("tab");
 
   // --- STATE MANAGEMENT ---
-  // selectedCharger holds the charger the user just tapped on.
   const [selectedCharger, setSelectedCharger] = useState<Charger | null>(null);
-  
-  // These store what filters the user has turned on
   const [filterConnector, setFilterConnector] = useState("All");
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false);
-  
-  // isNavigating is true when the user hits "Start Journey"
+  const [showFastOnly, setShowFastOnly] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
-  
-  // isTripPanelOpen handles the pop-up where you type Origin & Destination
   const [isTripPanelOpen, setIsTripPanelOpen] = useState(tabParam === "trip");
-  
-  // tripState stores all the data about your planned journey
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [tripState, setTripState] = useState<{
-    origin: string;      // Starting point text
-    destination: string; // Destination text
-    isLoading: boolean;   // Are we waiting for the route to download?
-    routeData: any | null; // The actual line coordinates to draw on the map
-    error: string | null;  // Any error (like "Location not found")
+    origin: string;
+    destination: string;
+    isLoading: boolean;
+    routeData: any | null;
+    error: string | null;
   }>({
     origin: "",
     destination: "",
@@ -108,30 +112,39 @@ export function MapPage() {
     error: null,
   });
 
-  // --- REFS (Technical) ---
-  // A 'ref' is like a box that keeps a specific object (like the Map) 
-  // between refreshes without triggering the whole page to redraw.
-  const mapContainerRef = useRef<HTMLDivElement>(null); // The <div> where map is built
-  const mapRef = useRef<maplibregl.Map | null>(null);    // The actual map instance
-  const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({}); // All charger pins
-  const userMarkerRef = useRef<maplibregl.Marker | null>(null);       // The blue dot for YOU
-  const hasInitializedNearest = useRef(false); // Tracks if we've already done the initial "nearest" selection
+  // --- REFS ---
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<{ [key: string]: maplibregl.Marker }>({});
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const hasInitializedNearest = useRef(false);
   const lastFetchedLocation = useRef<{ lat: number; lng: number } | null>(null);
+  const cardScrollRef = useRef<HTMLDivElement>(null);
 
   // Filter logic
   const filtered = chargers.filter((c) => {
     const matchConnector =
       filterConnector === "All" || c.connectorType === filterConnector;
     const matchAvailable = !showOnlyAvailable || c.available;
+    const matchFast = !showFastOnly || c.power >= 22;
+    const matchSearch = !searchQuery || 
+      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.address.toLowerCase().includes(searchQuery.toLowerCase());
     
     let matchRoute = true;
     if (tripState.routeData && tripState.routeData.coordinates) {
       const dist = minDistanceFromChargerToRoute(c, tripState.routeData.coordinates);
-      matchRoute = dist <= 5; // Chargers within 5km of driving path
+      matchRoute = dist <= 5;
     }
 
-    return matchConnector && matchAvailable && matchRoute;
+    return matchConnector && matchAvailable && matchFast && matchRoute && matchSearch;
   });
+
+  // Calculate distance from user location
+  const getChargerDistance = (charger: Charger) => {
+    if (!userLocation) return null;
+    return getDistance(userLocation.lat, userLocation.lng, charger.lat, charger.lng);
+  };
 
   // Calculate the driving trip
   const calculateTrip = async () => {
@@ -222,6 +235,13 @@ export function MapPage() {
       }
   };
 
+  const centerOnUser = () => {
+    if (mapRef.current && userMarkerRef.current) {
+      const lngLat = userMarkerRef.current.getLngLat();
+      mapRef.current.flyTo({ center: lngLat, zoom: 15, duration: 800 });
+    }
+  };
+
   // Initialize MapLibre
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -265,6 +285,7 @@ export function MapPage() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { longitude, latitude } = pos.coords;
+          setUserLocation({ lat: latitude, lng: longitude });
           
           if (userMarkerRef.current) {
             userMarkerRef.current.setLngLat([longitude, latitude]);
@@ -312,6 +333,7 @@ export function MapPage() {
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
           const { longitude, latitude } = pos.coords;
+          setUserLocation({ lat: latitude, lng: longitude });
           if (userMarkerRef.current) {
             userMarkerRef.current.setLngLat([longitude, latitude]);
           }
@@ -450,130 +472,148 @@ export function MapPage() {
     });
   }, [filtered, selectedCharger]);
 
+  // Scroll to selected card
+  useEffect(() => {
+    if (selectedCharger && cardScrollRef.current) {
+      const idx = filtered.findIndex(c => c.id === selectedCharger.id);
+      if (idx >= 0) {
+        const card = cardScrollRef.current.children[idx] as HTMLElement;
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+      }
+    }
+  }, [selectedCharger]);
+
   return (
-    // relative: helps position child elements exactly where we want them
-    // h-full: makes this container fill the entire height of the screen
-    // flex-col: stacks children (Header, Map, Card) vertically
-    // bg-slate-50: sets a very light grey-blue background color
-    <div className="relative h-full flex flex-col overflow-hidden bg-slate-50">
+    <div className="relative h-full flex flex-col overflow-hidden bg-slate-50" style={{ marginTop: '-1px' }}>
       
-      {/* --- NAVIGATION MODE HEADER --- */}
-      {/* This only shows up when you are driving (isNavigating is true) */}
-      {isNavigating && (
-        // absolute: floats this bar on top of the map
-        // top-4: gives it a little gap from the top edge
-        // left-1/2 & -translate-x-1/2: CSS trick to perfectly center horizontally
-        // z-50: ensures it stays on top of markers and pop-ups
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
-          {/* bg-white/95: 95% solid white (slightly see-through) */}
-          {/* backdrop-blur: makes the map behind it look blurry (premium glass feel) */}
-          {/* shadow-xl: adds a soft drop shadow to make it pop */}
-          {/* rounded-full: makes the bar look like a pill (circular ends) */}
-          <div className="bg-white/95 backdrop-blur shadow-xl rounded-full px-4 py-2 flex items-center gap-3 border border-border">
-            
-            {/* The "Live" Pulse Dot */}
-            <span className="flex h-3 w-3 relative">
-              {/* animate-ping: creates that growing circle effect you see on GPS apps */}
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600"></span>
-            </span>
-            
-            <span className="text-[0.875rem] font-bold">Navigating...</span>
-            
-            {/* A thin vertical separator line */}
-            <div className="w-px h-4 bg-border/60 mx-1 border-gray-300"></div>
-            
+      {/* === DARK HEADER SECTION (Statiq-style) === */}
+      <div className="relative z-30 flex flex-col" style={{ background: 'linear-gradient(135deg, #0f1b2d 0%, #1a2d47 50%, #152238 100%)' }}>
+        
+        {/* Top Row: Vehicle selector + Rewards + Profile */}
+        <div className="flex items-center justify-between px-4 pt-3 pb-2">
+          {/* Vehicle / EV Selector */}
+          <button className="flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-white/15 bg-white/5 backdrop-blur-sm hover:bg-white/10 transition-all active:scale-95">
+            <div className="w-5 h-5 rounded-full bg-primary/80 flex items-center justify-center">
+              <Zap className="w-3 h-3 text-white" />
+            </div>
+            <span className="text-white text-xs font-semibold tracking-tight">My EV</span>
+            <ChevronDown className="w-3.5 h-3.5 text-white/50" />
+          </button>
+
+          {/* Right side: Rewards badge + Profile */}
+          <div className="flex items-center gap-2.5">
+            {/* PlugPoints Rewards Badge */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-emerald-500/20 to-emerald-400/10 border border-emerald-400/20">
+              <Zap className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400" />
+              <span className="text-emerald-300 text-[0.65rem] font-black uppercase tracking-wider">Points</span>
+            </div>
+
+            {/* Trip / Route planner */}
             <button
-               onClick={() => {
-                 setIsNavigating(false); // Stop the map from following you
-                 setTripState(s => ({...s, routeData: null})); // Clear the blue line
-               }}
-               // text-red-600: bright red text for the stop button
-               // hover:bg-red-50: turns soft pink when your mouse is over it
-               className="text-[0.8125rem] text-red-600 font-bold hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
+              onClick={() => setIsTripPanelOpen(!isTripPanelOpen)}
+              className={`p-2 rounded-full transition-all ${
+                isTripPanelOpen || tripState.routeData
+                  ? "bg-blue-500/30 border border-blue-400/30" 
+                  : "bg-white/5 border border-white/10 hover:bg-white/10"
+              }`}
             >
-              End Trip
+              <Navigation className={`w-4 h-4 ${isTripPanelOpen || tripState.routeData ? 'text-blue-300' : 'text-white/70'}`} />
             </button>
           </div>
         </div>
-      )}
 
-      {/* --- START JOURNEY BUTTON --- */}
-      {/* This pops up only AFTER you've planned a route but BEFORE you start driving */}
-      {tripState.routeData && !isNavigating && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8 flex gap-2">
-          <button 
-             onClick={() => {
-               setIsNavigating(true); // Engages the GPS lock
-               if (mapRef.current && userMarkerRef.current) {
-                 const location = userMarkerRef.current.getLngLat() || mapRef.current.getCenter();
-                 // flyTo: smoothly glides the camera to your location
-                 // zoom: 16 is close up, pitch: 45 tilts the map 3D style
-                 mapRef.current.flyTo({ center: location, zoom: 16, pitch: 45 });
-               }
-             }}
-             // bg-blue-600: nice bright blue brand color
-             // shadow-blue-600/20: adds a subtle blue glow to the shadow
-             className="bg-blue-600 text-white px-8 py-3.5 rounded-full shadow-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-blue-600/20"
-          >
-            <Navigation className="w-5 h-5 fill-current" />
-            Start Journey
-          </button>
-          
-          <button 
-            onClick={() => setTripState(s => ({ ...s, routeData: null }))}
-            className="bg-white text-slate-400 p-3.5 rounded-full shadow-lg border border-slate-100 hover:text-red-500 transition-colors"
-            title="Clear Route"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        {/* Search Bar */}
+        <div className="px-4 pb-2">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search Charger..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setShowSearchPanel(true)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white text-sm text-slate-800 placeholder-slate-400 outline-none border-none shadow-sm"
+                style={{ fontSize: '13px' }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                // Toggle filter expansion (we already have filters below, this is just a styling match)
+              }}
+              className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm hover:bg-slate-50 transition-colors"
+            >
+              <SlidersHorizontal className="w-4.5 h-4.5 text-slate-600" />
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Top Controls */}
-      <div className="absolute top-3 left-3 right-3 z-10 flex flex-col gap-2 pointer-events-none">
-        <div className="flex gap-2 py-1 overflow-x-auto no-scrollbar pointer-events-auto items-center">
+        {/* Filter Chips Row */}
+        <div className="px-4 pb-3 flex gap-2 overflow-x-auto no-scrollbar">
+          {/* Available Filter */}
           <button
-            onClick={() => setIsTripPanelOpen(!isTripPanelOpen)}
-            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-all flex items-center gap-1.5 font-medium border ${
-              isTripPanelOpen || tripState.routeData
-                ? "bg-blue-600 text-white border-blue-700" 
-                : "bg-white text-foreground border-border hover:bg-muted"
+            onClick={() => setShowOnlyAvailable(!showOnlyAvailable)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
+              showOnlyAvailable 
+                ? "bg-white text-slate-800 border-white shadow-sm" 
+                : "bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
             }`}
           >
-            <Navigation className="w-3.5 h-3.5" />
-            Trip
+            {showOnlyAvailable ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5 text-white/40" />
+            )}
+            Available
+            {showOnlyAvailable && (
+              <X className="w-3 h-3 text-slate-400 ml-0.5 hover:text-slate-600" onClick={(e) => { e.stopPropagation(); setShowOnlyAvailable(false); }} />
+            )}
           </button>
-          
-          <div className="w-px h-5 bg-border mx-0.5" />
 
-          {["All", "J1772", "CCS", "Tesla"].map((type) => (
+          {/* Fast Charger Filter */}
+          <button
+            onClick={() => setShowFastOnly(!showFastOnly)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
+              showFastOnly 
+                ? "bg-white text-slate-800 border-white shadow-sm" 
+                : "bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
+            }`}
+          >
+            <Zap className={`w-3.5 h-3.5 ${showFastOnly ? 'text-amber-500 fill-amber-500' : 'text-amber-400/60'}`} />
+            Fast charger
+          </button>
+
+          {/* Offers Filter (decorative for now) */}
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
+          >
+            <Gift className="w-3.5 h-3.5 text-pink-400/70" />
+            Offers
+          </button>
+
+          {/* Connector Type Filters */}
+          {["All", "CCS", "J1772", "Tesla"].map((type) => (
             <button
               key={type}
               onClick={() => setFilterConnector(type === "Tesla" ? "Tesla Wall Connector" : type)}
-              className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-all font-medium border ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
                 filterConnector === type || (type === "Tesla" && filterConnector === "Tesla Wall Connector")
-                  ? "bg-primary text-white border-primary"
-                  : "bg-white text-foreground border-border"
+                  ? "bg-white text-slate-800 border-white shadow-sm"
+                  : "bg-white/8 text-white/80 border-white/10 hover:bg-white/15"
               }`}
             >
-              {type}
+              {type === "All" ? "All Chargers" : type}
             </button>
           ))}
-          
-          <button
-            onClick={() => setShowOnlyAvailable(!showOnlyAvailable)}
-            className={`px-3 py-1.5 rounded-full text-[0.75rem] whitespace-nowrap shadow-md transition-all font-medium border ${
-              showOnlyAvailable ? "bg-emerald-500 text-white border-emerald-600" : "bg-white text-foreground border-border"
-            }`}
-          >
-            Available Now
-          </button>
         </div>
+      </div>
 
-        {/* Trip Panel */}
-        {isTripPanelOpen && (
-          <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 flex flex-col gap-3 w-full max-w-sm mt-1 pointer-events-auto animate-in fade-in slide-in-from-top-4">
+      {/* === TRIP PLANNING PANEL (slides under header) === */}
+      {isTripPanelOpen && (
+        <div className="absolute top-[calc(100px+4.5rem)] left-3 right-3 z-40 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 flex flex-col gap-3 w-full max-w-sm">
             <div className="flex items-center justify-between">
                <h3 className="font-bold text-[0.875rem] flex items-center gap-2">
                    <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -634,85 +674,195 @@ export function MapPage() {
               )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Map */}
-      <div ref={mapContainerRef} className="flex-1 z-0" />
-
-      {/* --- CHARGER DETAILS CARD --- */}
-      {/* This is the white card that slides up from the bottom when you tap a marker */}
-      {selectedCharger && (
-        // animate-in...: makes the card slide up smoothly from the bottom
-        <div className="absolute bottom-6 left-4 right-4 z-20 animate-in slide-in-from-bottom-8 duration-300">
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl border border-white/50 overflow-hidden flex flex-col">
-            
-            {/* The small 'X' button to close the card */}
-            <button onClick={() => setSelectedCharger(null)} className="absolute top-3 right-3 z-30 p-2 bg-slate-100/50 hover:bg-slate-100 rounded-full transition-colors">
-              <X className="w-4 h-4 text-slate-800" />
+      {/* --- NAVIGATION MODE HEADER --- */}
+      {isNavigating && (
+        <div className="absolute top-[calc(100px+4.5rem)] left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/95 backdrop-blur shadow-xl rounded-full px-4 py-2 flex items-center gap-3 border border-border">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-600"></span>
+            </span>
+            <span className="text-[0.875rem] font-bold">Navigating...</span>
+            <div className="w-px h-4 bg-border/60 mx-1 border-gray-300"></div>
+            <button
+               onClick={() => {
+                 setIsNavigating(false);
+                 setTripState(s => ({...s, routeData: null}));
+               }}
+               className="text-[0.8125rem] text-red-600 font-bold hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-md transition-colors"
+            >
+              End Trip
             </button>
-
-            <div className="flex gap-4 p-4">
-              {/* Charger Image Container */}
-              {/* w-28 h-28: fixed size (about 112 pixels) */}
-              {/* flex-shrink-0: prevents the image from getting squashed if the text is long */}
-              <div className="w-28 h-28 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg relative bg-slate-100">
-                <ImageWithFallback src={selectedCharger.image} alt={selectedCharger.title} className="w-full h-full object-cover" />
-              </div>
-
-              {/* Text Info Container */}
-              <div className="flex-1 flex flex-col justify-between py-1 min-w-0">
-                <div className="pr-8">
-                  <div className="flex items-center gap-2">
-                    {/* leading-tight: keeps line spacing small for titles */}
-                    {/* truncate: adds '...' if the name is too long for the card */}
-                    <h3 className="text-lg font-bold text-slate-900 leading-tight truncate">{selectedCharger.title}</h3>
-                    {selectedCharger.verified && <Shield className="w-4 h-4 text-emerald-500 fill-emerald-50 flex-shrink-0" />}
-                  </div>
-                  
-                  <p className="text-sm text-slate-500 truncate mt-0.5">{selectedCharger.address}</p>
-
-                  
-                  {/* Badges Row (Rating, Connector, Power) */}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    {/* bg-amber-50: very light yellow background for the star rating */}
-                    <div className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-amber-500 stroke-amber-500" /> {selectedCharger.rating}
-                    </div>
-                    {/* uppercase tracking-wider: makes the text (e.g. CCS) look like a small neat label */}
-                    <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg text-xs font-bold uppercase tracking-wider">{selectedCharger.connectorType}</span>
-                    <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1">
-                      <Zap className="w-3 h-3 text-slate-400" /> {selectedCharger.power} kW
-                    </span>
-                  </div>
-                </div>
-
-                {/* Footer of the Card: Price + Button */}
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-                  <div className="flex flex-col">
-                    {/* leading-none: removes extra space above/below the big price number */}
-                    <span className="text-2xl font-black text-slate-900 leading-none">₹{selectedCharger.pricePerHour}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">per hour</span>
-                  </div>
-                  
-                  {/* navigate(...): goes to the detailed charging station page */}
-                  <button onClick={() => navigate(`/charger/${selectedCharger.id}`)} className="bg-primary text-white font-bold px-6 py-2.5 rounded-2xl hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all active:scale-95">
-                    View Details
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Floating Info */}
-      {!selectedCharger && (
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 transition-transform duration-300">
+      {/* --- START JOURNEY BUTTON --- */}
+      {tripState.routeData && !isNavigating && (
+        <div className="absolute bottom-44 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8 flex gap-2">
+          <button 
+             onClick={() => {
+               setIsNavigating(true);
+               if (mapRef.current && userMarkerRef.current) {
+                 const location = userMarkerRef.current.getLngLat() || mapRef.current.getCenter();
+                 mapRef.current.flyTo({ center: location, zoom: 16, pitch: 45 });
+               }
+             }}
+             className="bg-blue-600 text-white px-8 py-3.5 rounded-full shadow-lg font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-blue-600/20"
+          >
+            <Navigation className="w-5 h-5 fill-current" />
+            Start Journey
+          </button>
+          
+          <button 
+            onClick={() => setTripState(s => ({ ...s, routeData: null }))}
+            className="bg-white text-slate-400 p-3.5 rounded-full shadow-lg border border-slate-100 hover:text-red-500 transition-colors"
+            title="Clear Route"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {/* === MAP CONTAINER === */}
+      <div ref={mapContainerRef} className="flex-1 z-0" />
+
+      {/* === FLOATING ACTION BUTTONS (Right side) === */}
+      <div className="absolute right-3 bottom-48 z-20 flex flex-col gap-2.5">
+        {/* GPS Center Button */}
+        <button
+          onClick={centerOnUser}
+          className="w-11 h-11 bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all"
+          title="Center on my location"
+        >
+          <LocateFixed className="w-5 h-5 text-slate-700" />
+        </button>
+        
+        {/* List View Toggle */}
+        <button
+          onClick={() => navigate("/")}
+          className="w-11 h-11 bg-white rounded-xl shadow-lg flex items-center justify-center border border-slate-100 hover:bg-slate-50 active:scale-95 transition-all"
+          title="List view"
+        >
+          <List className="w-5 h-5 text-slate-700" />
+        </button>
+      </div>
+
+      {/* === BOTTOM STATION CARDS (Horizontally Scrollable) === */}
+      <div className="absolute bottom-2 left-0 right-0 z-20">
+        <div 
+          ref={cardScrollRef}
+          className="flex gap-3 overflow-x-auto no-scrollbar px-3 pb-2 snap-x snap-mandatory"
+          style={{ scrollSnapType: 'x mandatory' }}
+        >
+          {filtered.map((charger) => {
+            const dist = getChargerDistance(charger);
+            const isSelected = selectedCharger?.id === charger.id;
+            
+            return (
+              <div
+                key={charger.id}
+                onClick={() => {
+                  setSelectedCharger(charger);
+                  if (mapRef.current) {
+                    mapRef.current.flyTo({ center: [charger.lng, charger.lat], zoom: 15, duration: 600 });
+                  }
+                }}
+                className={`flex-shrink-0 snap-center cursor-pointer transition-all duration-300 ${
+                  isSelected ? 'scale-[1.02]' : 'hover:scale-[1.01]'
+                }`}
+                style={{ width: 'calc(85vw - 24px)', maxWidth: '340px' }}
+              >
+                <div className={`bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-colors ${
+                  isSelected ? 'border-primary shadow-xl' : 'border-transparent'
+                }`}>
+                  {/* Card Content */}
+                  <div className="p-3.5">
+                    <div className="flex items-start gap-3">
+                      {/* Station Icon */}
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <BatteryCharging className="w-5 h-5 text-primary" />
+                      </div>
+
+                      {/* Station Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="text-sm font-bold text-slate-900 leading-tight line-clamp-1">{charger.title}</h3>
+                          {/* Rating Badge */}
+                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 flex-shrink-0">
+                            <span className="text-xs font-bold text-emerald-700">{charger.rating}</span>
+                            <Star className="w-3 h-3 text-emerald-500 fill-emerald-500" />
+                          </div>
+                        </div>
+                        
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{charger.address}</p>
+                        
+                        {/* Distance */}
+                        {dist !== null && (
+                          <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
+                            {dist < 1 ? `${Math.round(dist * 1000)}m away` : `${dist.toFixed(1)} km away`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Availability + Connector Types + View */}
+                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100">
+                      <div className="flex items-center gap-2">
+                        {/* Availability Badge */}
+                        <div className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          charger.available 
+                            ? 'bg-emerald-50 text-emerald-600' 
+                            : 'bg-red-50 text-red-500'
+                        }`}>
+                          {charger.available ? (
+                            <CheckCircle2 className="w-3 h-3" />
+                          ) : (
+                            <XCircle className="w-3 h-3" />
+                          )}
+                          {charger.available ? 'Available' : 'In Use'}
+                        </div>
+
+                        {/* Connector Type Pills */}
+                        <div className="flex items-center gap-1">
+                          {charger.connectorType.includes("CCS") && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">DC</span>
+                          )}
+                          {(charger.connectorType.includes("J1772") || charger.connectorType.includes("Tesla")) && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">AC</span>
+                          )}
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600">{charger.power}kW</span>
+                        </div>
+                      </div>
+
+                      {/* View Details Arrow */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/charger/${charger.id}`);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-primary text-white text-[11px] font-bold hover:bg-primary/90 active:scale-95 transition-all"
+                      >
+                        Details
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* === CHARGER COUNT BADGE (when no cards) === */}
+      {filtered.length === 0 && (
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
           <div className="bg-slate-900/90 backdrop-blur-md text-white shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-3 border border-white/10">
-            <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] font-black">{filtered.length}</div>
             <span className="text-xs font-bold tracking-tight">
-              chargers {tripState.routeData ? 'on your route' : 'nearby you'}
+              No chargers match your filters
             </span>
           </div>
         </div>
