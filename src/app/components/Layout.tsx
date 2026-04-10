@@ -41,8 +41,9 @@ export function Layout() {
   const isChargerDetail = location.pathname.startsWith("/charger/");
   const isAuthPage = location.pathname === "/auth";
   const isMapPage = location.pathname === "/map";
+  const isHomePage = location.pathname === "/";
   const hideNavBar = isChargerDetail || isAuthPage;
-  const hideHeader = isMapPage; // Map page has its own custom dark header
+  const hideHeader = isMapPage || isHomePage; // These pages have their own custom headers
 
   return (
     // h-screen: makes the app exactly the height of the phone screen
@@ -50,13 +51,13 @@ export function Layout() {
       
       {/* ─── APP HEADER ─── */}
       {!hideHeader && (
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-5 py-4 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-5 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-transform" onClick={() => navigate("/")}>
           {/* Main Logo Icon */}
-          <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-            <Zap className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 bg-primary rounded-xl flex items-center justify-center shadow-md shadow-primary/20">
+            <Zap className="w-4.5 h-4.5 text-white" />
           </div>
-          <span className="text-[1.2rem] tracking-tighter" style={{ fontWeight: 900 }}>
+          <span className="text-[1.1rem] tracking-tight" style={{ fontWeight: 800 }}>
             PlugPoint
           </span>
         </div>
@@ -65,25 +66,25 @@ export function Layout() {
         {isAuthenticated ? (
           <button
             onClick={() => navigate("/profile")}
-            className="w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity active:scale-95"
+            className="w-9 h-9 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity active:scale-95"
           >
             {user?.avatar && !avatarError ? (
               <img 
                 src={user.avatar} 
                 alt="" 
-                className="w-full h-full rounded-full object-cover shadow-sm border border-slate-200" 
+                className="w-full h-full rounded-full object-cover shadow-sm border-2 border-primary/20" 
                 onError={() => setAvatarError(true)} 
               />
             ) : (
-              <svg viewBox="0 0 24 24" className="w-11 h-11 text-slate-800" fill="currentColor">
-                 <path fillRule="evenodd" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" clipRule="evenodd" />
-              </svg>
+              <div className="w-full h-full rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="w-5 h-5 text-primary" />
+              </div>
             )}
           </button>
         ) : (
           <button
             onClick={() => navigate("/auth")}
-            className="px-5 py-2 bg-primary text-white rounded-xl text-[0.8rem] font-black uppercase tracking-widest shadow-lg shadow-primary/20"
+            className="px-4 py-2 bg-primary text-white rounded-xl text-[0.75rem] font-bold uppercase tracking-wider shadow-md shadow-primary/20 hover:shadow-lg transition-shadow"
           >
             Sign In
           </button>
@@ -103,8 +104,8 @@ export function Layout() {
       {/* ─── BOTTOM NAVIGATION BAR ─── */}
       {/* Only show if we are NOT on a special page that hides it */}
       {!hideNavBar && (
-        <nav className="sticky bottom-0 z-50 bg-white/95 backdrop-blur-3xl border-t border-slate-100/50 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_40px_rgba(0,0,0,0.04)]">
-        <div className="flex items-center justify-around max-w-lg mx-auto py-1">
+        <nav className="sticky bottom-0 z-50 bg-white/95 backdrop-blur-2xl border-t border-slate-100/80 nav-shadow">
+        <div className="flex items-center justify-around max-w-lg mx-auto py-1.5 px-1">
           {navItems.map((item) => {
             // Check if this nav item matches the current page we are on
             const isActive =
@@ -118,41 +119,48 @@ export function Layout() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={`flex flex-col items-center justify-center py-2 px-3 min-w-[4.8rem] rounded-2xl transition-all relative ${
-                  isPlusButton ? "" : isActive ? "text-primary scale-105" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50/50"
+                className={`flex flex-col items-center justify-center py-2 px-3 min-w-[4rem] rounded-2xl transition-all duration-200 relative ${
+                  isPlusButton ? "" : isActive ? "text-primary" : "text-slate-400 hover:text-slate-500"
                 }`}
               >
                 {/* Special design for the 'List Charger' button */}
                 {isPlusButton ? (
-                  <div className="w-13 h-13 -mt-9 bg-primary/10 rounded-3xl p-1 shadow-lg shadow-primary/20">
-                    <div className="w-full h-full bg-primary rounded-2xl flex items-center justify-center border border-white/20 active:scale-90 transition-transform">
-                      <Icon className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 -mt-7 rounded-2xl p-0.5 bg-gradient-to-br from-primary to-emerald-400 shadow-lg shadow-primary/25">
+                    <div className="w-full h-full bg-primary rounded-[14px] flex items-center justify-center active:scale-90 transition-transform">
+                      <Icon className="w-5 h-5 text-white" />
                     </div>
                   </div>
                 ) : (
-                  <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? "stroke-[2.5px] drop-shadow-sm" : "stroke-[2px]"}`} />
+                  <div className="relative">
+                    <Icon className={`w-[22px] h-[22px] transition-all duration-200 ${
+                      isActive ? "stroke-[2.5px]" : "stroke-[1.8px]"
+                    }`} />
+                    {/* Active indicator dot */}
+                    {isActive && (
+                      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary rounded-full" />
+                    )}
+                  </div>
                 )}
                 
                 {/* Red badge for unread messages */}
                 {item.label === "Messages" && totalUnread > 0 && (
-                  <div className="absolute top-1 right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white">
-                    <span className="text-[0.55rem] font-black text-white">{totalUnread > 9 ? "9+" : totalUnread}</span>
+                  <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white">
+                    <span className="text-[0.5rem] font-black text-white">{totalUnread > 9 ? "9+" : totalUnread}</span>
                   </div>
                 )}
                 
                 {/* The Label Text */}
                 <span
-                  className={`text-[0.65rem] mt-1.5 font-black uppercase tracking-widest ${
-                    isPlusButton ? "text-primary" : isActive ? "text-primary opacity-100" : "text-slate-300 opacity-60"
+                  className={`text-[0.6rem] mt-1 tracking-wide transition-all duration-200 ${
+                    isPlusButton 
+                      ? "text-primary font-bold" 
+                      : isActive 
+                        ? "text-primary font-bold opacity-100" 
+                        : "text-slate-400 font-medium opacity-70"
                   }`}
                 >
                   {item.label}
                 </span>
-                
-                {/* Small DOT indicator for active non-plus items */}
-                {!isPlusButton && isActive && (
-                  <div className="absolute top-1.5 right-4 w-1.5 h-1.5 bg-primary rounded-full animate-in fade-in zoom-in duration-300" />
-                )}
               </button>
             );
           })}
