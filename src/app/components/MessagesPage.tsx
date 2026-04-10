@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import { useApp } from "../context/AppContext";
 import { useConversations } from "../../hooks/useConversations";
@@ -144,6 +145,7 @@ export function MessagesPage() {
 function ActiveThread({ conversationId, onBack, user }: { conversationId: string; onBack: () => void; user: any }) {
   const { messages, loading, sendMessage } = useMessages(conversationId);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto scroll
@@ -151,10 +153,20 @@ function ActiveThread({ conversationId, onBack, user }: { conversationId: string
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    sendMessage(input);
-    setInput("");
+  const handleSend = async () => {
+    if (!input.trim() || sending) return;
+    setSending(true);
+    const content = input;
+    
+    // Optimistic clear could happen here, but it's safer to wait for result or at least hold it if error
+    const { success, error } = await sendMessage(content);
+    
+    if (success) {
+      setInput("");
+    } else {
+      toast.error(error?.message || error || "Failed to send message. Are you logged in with a valid profile?");
+    }
+    setSending(false);
   };
 
   return (
@@ -245,9 +257,9 @@ function ActiveThread({ conversationId, onBack, user }: { conversationId: string
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || sending}
             className={`w-11 h-11 mb-0.5 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-              input.trim()
+              input.trim() && !sending
                 ? "bg-primary shadow-lg shadow-primary/30 text-white active:scale-90"
                 : "bg-slate-200 text-slate-400"
             }`}
